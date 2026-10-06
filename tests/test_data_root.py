@@ -61,3 +61,15 @@ def test_inside_does_not_follow_symlinks(tmp_path):
     path = tmp_path / "repo" / "out" / "a.glb"
     assert dr.inside(path, (tmp_path / "repo",))
     assert not dr.inside(os.path.realpath(tmp_path / "repo" / "out"), (tmp_path / "repo",))
+
+
+def test_importing_the_package_applies_the_root(tmp_path):
+    import subprocess
+    import sys
+
+    env = {"PATH": os.environ["PATH"], dr.ENV_VAR: str(tmp_path)}
+    out = subprocess.run(
+        [sys.executable, "-c", "import os, image_to_3dlab; print(os.environ['HF_HOME'])"],
+        env=env, cwd=dr.REPO, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert out == str(tmp_path / "hf")
