@@ -38,6 +38,7 @@ game-ready LODs), start with [the prop sheet guide](../docs/prop-sheets.md).
 | `bootstrap_pixal3d.py` | Install Pixal3D (raven38/pixal3d.cpp): a `trellis-cli` build plus its Q8_0 weights. |
 | `bootstrap_blender.py` | Install Blender 4.2 LTS for Finish on Linux, from blender.org. |
 | `bootstrap_gltfpack.py` | Install gltfpack for the Props tab, from meshoptimizer's GitHub release. |
+| `relocate_data.py` | Move weights, caches, backend checkouts and outputs to another drive, with one setting. |
 | `bootstrap_matte.py` | Install BiRefNet-lite, the background remover every backend uses once it is present. |
 | `bootstrap_qwen_image.py` | Install the text-to-image route: a stable-diffusion.cpp binary and Qwen-Image weights. |
 | `pixal3d_generate.py` | End-to-end Pixal3D generation: image -> textured GLB, on a Mac or an NVIDIA card. |

@@ -754,10 +754,12 @@ def _resolve_output_base(output_dir: str | None) -> Path:
     """Resolve the user-chosen output base dir. Defaults to <repo-root>/output; a client-
     supplied override is resolved and required to stay inside that same tree (never an
     arbitrary absolute path -- this is a local server writing files from browser input)."""
-    base = (REPO / "output").resolve()
+    # Normalised, not resolved: output/ may be a symlink onto the data drive, and paths
+    # under it must stay inside the repo tree the viewer serves.
+    base = Path(os.path.normpath(REPO / "output"))
     if not output_dir or not output_dir.strip():
         return base
-    candidate = (REPO / output_dir.strip()).resolve()
+    candidate = Path(os.path.normpath(REPO / output_dir.strip()))
     if candidate != base and base not in candidate.parents:
         raise ValueError(f"output_dir must be inside {base}")
     return candidate

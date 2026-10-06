@@ -73,3 +73,15 @@ characters/
 # The template is the exception and stays tracked.
 manifests/*.json
 !manifests/example-trellis2.json
+
+# Where big data lives (scripts/relocate_data.py). A path on this machine, not the repo.
+/.i2l-data
+# The same heavy folders when relocate_data.py has made them symlinks (a trailing slash
+# only matches real directories).
+/.venv
+/vendor
+/output
+/characters
+/hunyuan_mlx/*/weights
+/hunyuan_mlx/*/outputs
+/hunyuan_mlx/*/.venv

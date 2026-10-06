@@ -652,13 +652,13 @@ def test_slugify_strips_unsafe_characters():
 # --- output directory + debug-file cleanup ------------------------------------------------
 
 def test_resolve_output_base_defaults_to_repo_output():
-    assert api._resolve_output_base(None) == (api.REPO / "output").resolve()
-    assert api._resolve_output_base("  ") == (api.REPO / "output").resolve()
+    assert api._resolve_output_base(None) == api.REPO / "output"
+    assert api._resolve_output_base("  ") == api.REPO / "output"
 
 
 def test_resolve_output_base_accepts_subdir_inside_output():
     resolved = api._resolve_output_base("output/my-runs")
-    assert resolved == (api.REPO / "output" / "my-runs").resolve()
+    assert resolved == api.REPO / "output" / "my-runs"
 
 
 @pytest.mark.parametrize("escape", ["../vendor", "/etc", "../../etc/passwd"])

@@ -6,6 +6,11 @@ import os
 
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
+# Caches onto the data drive (if one is set) before any tool reads its cache variable.
+from image_to_3dlab.data_root import apply_env
+
+apply_env()
+
 from image_to_3dlab.cli import main
 
 if __name__ == "__main__":

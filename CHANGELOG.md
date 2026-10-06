@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Keep the big stuff on another drive.** `scripts/relocate_data.py /Volumes/X/i2l`
+  moves `vendor/`, `output/`, `.venv/` and the Hunyuan weights there as symlinks and
+  writes the path to `.i2l-data`. The lab and `pipeline.py` then point every model cache
+  (Hugging Face, rembg, torch, uv, cargo) at the same drive. `I2L_DATA` overrides it.
+
 ## [0.3.9] - 2026-10-04
 
 ### Changed

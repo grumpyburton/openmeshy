@@ -319,10 +319,15 @@ def remove(backend_id: str) -> dict[str, Any]:
 
 
 def _inside_known_roots(path: Path) -> bool:
+    from image_to_3dlab.data_root import data_root
     from image_to_3dlab.matte import model_home
 
     # rembg's model folder too, for the background remover's single file.
     roots = (REPO.resolve(), HF_HUB_DIR.resolve(), model_home().resolve())
+    # The data drive too: vendor/ and weights are symlinks onto it, so they resolve there.
+    extra = data_root()
+    if extra is not None:
+        roots += (extra.resolve(),)
     return any(root == path or root in path.parents for root in roots)
 
 
