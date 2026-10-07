@@ -34,7 +34,7 @@ canvas { display: block; }
 .viewport-camera-controls button[data-camera-view=reset] { min-width: 48px;
   border-left-color: #3a424f; }
 #err { position: fixed; left: 10px; bottom: 10px; z-index: 20; color: #e88; max-width: 70vw; }
-#generate-view, #about-view, #setup-view, #finish-view, #props-view { position: fixed; inset: 42px 0 0 0; overflow: auto; padding: 22px 24px 30px;
+#generate-view, #about-view, #setup-view, #finish-view, #unity-view, #props-view { position: fixed; inset: 42px 0 0 0; overflow: auto; padding: 22px 24px 30px;
                  background: radial-gradient(circle at 75% 20%, #1d2a3a 0, transparent 38%), #14161a; }
 .credits-col { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 .credits-col h2 { margin: 0 0 10px; font-size: 16px; color: #cfe3ff; }

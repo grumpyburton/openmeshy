@@ -6,6 +6,7 @@ import { checkForUpdates } from './modes/update.js';
 import './modes/generate-image.js';
 import './modes/generate.js';
 import './modes/finish.js';
+import './modes/unity.js';
 import './modes/props.js';
 import './modes/rig-review.js';
 import './modes/animate.js';
@@ -20,6 +21,7 @@ const modes = {
   'generate-image': byId('generate-image-view'),
   generate: byId('generate-view'),
   finish: byId('finish-view'),
+  unity: byId('unity-view'),
   props: byId('props-view'),
   rig: byId('rig-view'),
   animate: byId('animate-view'),
@@ -32,6 +34,7 @@ function setMode(activeMode) {
   modes['generate-image'].hidden = activeMode !== 'generate-image';
   modes.generate.hidden = activeMode !== 'generate';
   modes.finish.hidden = activeMode !== 'finish';
+  modes.unity.hidden = activeMode !== 'unity';
   modes.props.hidden = activeMode !== 'props';
   modes.rig.hidden = activeMode !== 'rig';
   modes.animate.hidden = activeMode !== 'animate';

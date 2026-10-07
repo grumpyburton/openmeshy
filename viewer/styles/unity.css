@@ -1,0 +1,18 @@
+/* Image -> Unity: the Finish layout, with one preview instead of a before/after pair. */
+#unity-view .finish-grid { max-width: none; }
+#unity-image-preview { max-width: 100%; max-height: 220px; object-fit: contain;
+  border: 1px solid #303744; border-radius: 8px; background: #14161a; margin: 4px 0 12px; }
+#unity-image-preview[hidden] { display: none; }
+#unity-preview { position: sticky; top: 0; display: flex; flex-direction: column;
+  height: calc(100vh - 42px - 52px); min-height: 420px; }
+#unity-preview-empty { flex: 1; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 24px; opacity: .55; font-size: 13px;
+  border: 1px dashed #303744; border-radius: 8px; }
+#unity-preview-frame { flex: 1; width: 100%; min-height: 0; border: 1px solid #303744;
+  border-radius: 8px; background: #14161a; }
+#unity-preview-empty[hidden], #unity-preview-frame[hidden] { display: none; }
+#unity-status { font-size: 12px; margin-top: 6px; }
+#unity-result { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+#unity-result[hidden] { display: none; }
+#unity-rig-note { margin: 4px 0; font-size: 13px; }
+.unity-steps { margin: 6px 0 0 18px; padding: 0; font-size: 12px; line-height: 1.6; }

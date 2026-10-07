@@ -72,6 +72,13 @@ from finish_api import (
     run_job as run_finish_job,
     status_payload as finish_status_payload,
 )
+from unity_api import (
+    ARTIFACTS as UNITY_ARTIFACTS,
+    UNITY_JOBS,
+    cancel_job as cancel_unity_job,
+    run_job as run_unity_job,
+    status_payload as unity_status_payload,
+)
 from props_api import (
     PROPS_JOBS,
     cancel_job as cancel_props_job,
@@ -1080,6 +1087,9 @@ def _terminate_active_job() -> None:
     finish_job = FINISH_JOBS.get(FINISH_JOBS.active) if FINISH_JOBS.active else None
     if finish_job is not None and finish_job.process is not None and finish_job.process.poll() is None:
         _killpg_if_alive(finish_job.process.pid)
+    unity_job = UNITY_JOBS.get(UNITY_JOBS.active) if UNITY_JOBS.active else None
+    if unity_job is not None and unity_job.process is not None and unity_job.process.poll() is None:
+        _killpg_if_alive(unity_job.process.pid)
 
 
 def _props_baking() -> bool:
@@ -2007,6 +2017,21 @@ class Handler(SimpleHTTPRequestHandler):
         if len(parts) == 5 and parts[:3] == ["api", "finish", "runs"] and parts[4] == "resume":
             self._resume_finish_job(parts[3])
             return
+        if parts == ["api", "unity"]:
+            self._create_unity_job()
+            return
+        if len(parts) == 4 and parts[:2] == ["api", "unity"] and parts[3] == "cancel":
+            job = UNITY_JOBS.get(parts[2])
+            if job is None:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            try:
+                cancel_unity_job(job)
+            except RuntimeError as exc:
+                self._send_json(409, {"error": str(exc)})
+                return
+            self._send_json(202, {"job_id": job.id, "status": job.status})
+            return
         if parts == ["api", "props"]:
             self._create_props_job()
             return
@@ -2253,6 +2278,20 @@ class Handler(SimpleHTTPRequestHandler):
             if action in FINISH_ARTIFACTS:
                 self._finish_artifact(job_id, action)
                 return
+        if len(parts) == 4 and parts[:2] == ["api", "unity"]:
+            job = UNITY_JOBS.get(parts[2])
+            if job is None:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            if parts[3] == "events":
+                self._stream_events(job)
+                return
+            if parts[3] == "status":
+                self._send_json(200, unity_status_payload(job))
+                return
+            if parts[3] in UNITY_ARTIFACTS:
+                self._unity_artifact(job, parts[3])
+                return
         if parts == ["api", "props", "tools"]:
             self._send_json(200, props_tools_payload())
             return
@@ -2338,6 +2377,9 @@ class Handler(SimpleHTTPRequestHandler):
             if _props_baking():
                 self._send_json(409, {"error": "a prop sheet is baking; wait for it to finish"})
                 return
+            if UNITY_JOBS.busy():
+                self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
+                return
             try:
                 settings = spec.validate_settings(raw_settings)
             except ValueError as exc:
@@ -2409,6 +2451,9 @@ class Handler(SimpleHTTPRequestHandler):
             if _props_baking():
                 self._send_json(409, {"error": "a prop sheet is baking; wait for it to finish"})
                 return
+            if UNITY_JOBS.busy():
+                self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
+                return
             if SETUP_ACTIVE is not None:
                 self._send_json(409, {"error": "setup is running; wait for it to finish"})
                 return
@@ -2464,6 +2509,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if _props_baking():
                 self._send_json(409, {"error": "a prop sheet is baking; wait for it to finish"})
+                return
+            if UNITY_JOBS.busy():
+                self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
                 return
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > 768 * 1024 * 1024:
@@ -2570,6 +2618,9 @@ class Handler(SimpleHTTPRequestHandler):
             if _props_baking():
                 self._send_json(409, {"error": "a prop sheet is baking; wait for it to finish"})
                 return
+            if UNITY_JOBS.busy():
+                self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
+                return
         try:
             if find_blender() is None:
                 raise RuntimeError(blender_missing_help())
@@ -2587,6 +2638,78 @@ class Handler(SimpleHTTPRequestHandler):
             "events_url": f"/api/finish/{job.id}/events",
             "status_url": f"/api/finish/{job.id}/status",
         })
+
+    def _create_unity_job(self) -> None:
+        """One picture in, a rigged Unity-ready folder out (scripts/image_to_unity.py).
+
+        Refused while anything else holds the GPU or Blender: its generate stage loads the
+        same multi-gigabyte model a generation does.
+        """
+        try:
+            active = JOBS.get(JOBS.active) if JOBS.active else None
+            finish = FINISH_JOBS.get(FINISH_JOBS.active) if FINISH_JOBS.active else None
+            for busy, what in (
+                (active is not None and active.status in {"queued", "running", "cancelling"},
+                 "a generation is running"),
+                (finish is not None and finish.status not in {"done", "error", "cancelled"},
+                 "a finishing run is going"),
+                (SETUP_ACTIVE is not None, "setup is running"),
+                (_props_baking(), "a prop sheet is baking"),
+            ):
+                if busy:
+                    self._send_json(409, {"error": f"{what}; wait for it to finish"})
+                    return
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 64 * 1024 * 1024:
+                self._send_json(400, {"error": "image is missing or larger than 64 MiB"})
+                return
+            form = parse_multipart(self.headers.get("Content-Type", ""), self.rfile.read(length))
+            image = form.get("image")
+            if not image:
+                self._send_json(422, {"error": "multipart field 'image' is required"})
+                return
+            try:
+                raw = json.loads(form.get("settings", {}).get("value", "{}"))
+            except json.JSONDecodeError as exc:
+                self._send_json(422, {"error": f"invalid settings JSON: {exc}"})
+                return
+            if not isinstance(raw, dict):
+                self._send_json(422, {"error": "settings must be a JSON object"})
+                return
+            if find_blender() is None:
+                self._send_json(409, {"error": blender_missing_help()})
+                return
+            try:
+                job = UNITY_JOBS.create(str(image.get("filename") or ""), image["data"], raw)
+            except ValueError as exc:
+                self._send_json(422, {"error": str(exc)})
+                return
+            except RuntimeError as exc:
+                self._send_json(409, {"error": str(exc)})
+                return
+            threading.Thread(target=run_unity_job, args=(job,), daemon=True,
+                             name=f"unity-{job.id[:8]}").start()
+            self._send_json(202, {
+                "job_id": job.id, "name": job.name, "settings": job.settings,
+                "events_url": f"/api/unity/{job.id}/events",
+                "status_url": f"/api/unity/{job.id}/status",
+            })
+        except Exception as exc:
+            self._send_json(500, {"error": str(exc)})
+
+    def _unity_artifact(self, job, action: str) -> None:
+        attribute, content_type, disposition = UNITY_ARTIFACTS[action]
+        path = getattr(job, attribute)
+        if job.status != "done" or not path.is_file() or job.directory not in path.parents:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        data = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Disposition", f'{disposition}; filename="{path.name}"')
+        self.end_headers()
+        self.wfile.write(data)
 
     def _cancel_finish_job(self, job_id: str) -> None:
         job = FINISH_JOBS.get(job_id)

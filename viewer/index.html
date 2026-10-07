@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="./styles/animate.css">
 <link rel="stylesheet" href="./styles/rig.css">
 <link rel="stylesheet" href="./styles/welcome.css">
+<link rel="stylesheet" href="./styles/unity.css">
 </head>
 <body>
 <div id="mode-switch">
@@ -22,6 +23,7 @@
   <button id="mode-generate-image" class="mode" title="No source image? Write a prompt and make one">Generate Image</button>
   <button id="mode-generate" class="mode" title="Turn an image into a 3D mesh">Generate 3D</button>
   <button id="mode-finish" class="mode" title="Retopologise, Pixel Match and compress an existing asset">Finish</button>
+  <button id="mode-unity" class="mode" title="One image in, a rigged model ready for Unity out">Image &rarr; Unity</button>
   <button id="mode-props" class="mode" title="Split a prop sheet into separate props, each with LODs">Props</button>
   <button id="mode-rig" class="mode" title="Correct the rest skeleton">Rig Edit</button>
   <button id="mode-animate" class="mode" title="Pose and animate the bound skeleton">Pose</button>
@@ -461,6 +463,85 @@
         <iframe id="finish-compare-frame" title="before and after" hidden></iframe>
       </div>
 
+    </div>
+  </div>
+</section>
+
+<section id="unity-view" hidden>
+  <div class="generate-grid finish-grid">
+    <div class="finish-left">
+    <div class="generate-card">
+      <h2>Image &rarr; Unity</h2>
+      <p>One picture in; a textured, rigged model out, ready to drop into a Unity project.
+        Generate, clean up, rig and export, in one go.</p>
+
+      <div class="field"><label for="unity-image">Image</label>
+        <input id="unity-image" type="file" accept="image/png,image/jpeg,image/webp">
+        <small id="unity-image-name">a character or creature, whole body, plain background</small></div>
+      <img id="unity-image-preview" alt="" hidden>
+      <div class="field"><label for="unity-class">What is it?</label>
+        <select id="unity-class">
+          <option value="humanoid" selected>Humanoid &middot; Unity Humanoid rig, Mixamo animations</option>
+          <option value="quadruped">Four-legged creature &middot; Generic rig</option>
+          <option value="custom">Other creature &middot; Generic rig, learned rigger only</option>
+          <option value="none">Prop &middot; no rig</option>
+        </select></div>
+      <div class="field"><label for="unity-faces">Triangles</label>
+        <select id="unity-faces">
+          <option value="10000">10,000 &middot; mobile</option>
+          <option value="30000" selected>30,000 &middot; game-ready</option>
+          <option value="60000">60,000 &middot; hero</option>
+        </select></div>
+      <details class="image-advanced">
+        <summary>Advanced</summary>
+        <div class="field"><label for="unity-name">Asset name</label>
+          <input id="unity-name" type="text" placeholder="from the file name"></div>
+        <div class="field"><label for="unity-height">Height (metres)</label>
+          <input id="unity-height" type="number" step="0.05" min="0.05" max="50" placeholder="humanoids: 1.8">
+          <small>Leave empty to keep the generated size (humanoids are scaled to 1.8 m).</small></div>
+        <div class="field"><label for="unity-seed">Seed</label>
+          <input id="unity-seed" type="number" step="1" min="0" value="42"></div>
+      </details>
+
+      <button id="unity-submit" disabled>Make Unity model</button>
+      <button id="unity-cancel" hidden>Cancel</button>
+
+      <div id="unity-progress-box" hidden>
+        <div id="generate-progress-head"><span id="unity-overall-label">Waiting</span><span id="unity-overall-eta"></span></div>
+        <div class="progress-track"><div id="unity-overall-bar"></div></div>
+        <div id="unity-stages"></div>
+        <div id="unity-status" aria-live="polite"></div>
+      </div>
+
+      <div id="unity-result" hidden>
+        <a id="unity-download" download>Download for Unity (.zip)</a>
+        <a id="unity-run" target="_blank">Run record</a>
+        <p id="unity-rig-note"></p>
+        <small id="unity-where"></small>
+        <details class="image-advanced">
+          <summary>How to import</summary>
+          <ol class="unity-steps">
+            <li>Copy <code>unity/OpenMeshy/Editor/OpenMeshyImporter.cs</code> from this repo into
+              your project's <code>Assets/OpenMeshy/Editor/</code> (once per project).</li>
+            <li>Unzip into <code>Assets/</code>. The importer sets the rig, the scale and URP
+              materials as it imports.</li>
+            <li>Humanoids: drag in any Mixamo or Unity Humanoid animation; it retargets.</li>
+          </ol>
+        </details>
+      </div>
+    </div>
+    </div>
+
+    <div class="finish-side">
+      <div id="unity-preview" class="generate-card">
+        <div class="finish-compare-head">
+          <h2 id="unity-preview-label">Preview</h2>
+          <small>Drag to turn. The rigged model, as Unity will get it.</small>
+        </div>
+        <div id="unity-preview-empty">Pick an image and press Make. The finished, rigged model
+          shows here.</div>
+        <iframe id="unity-preview-frame" title="rigged model preview" hidden></iframe>
+      </div>
     </div>
   </div>
 </section>

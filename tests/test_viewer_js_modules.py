@@ -970,3 +970,28 @@ def test_every_viewer_script_parses(script):
         capture_output=True,
     )
     assert result.returncode == 0, result.stderr.decode()
+
+
+@pytest.mark.skipif(NODE is None, reason="Node is required to execute browser ES modules")
+def test_unity_tab_describes_the_rig_it_got():
+    module_url = (REPO / "viewer" / "components" / "unity-format.js").as_uri()
+    program = f"""
+      import {{ STAGE_META, previewUrl, rigNote }} from {json.dumps(module_url)};
+      console.log(JSON.stringify([
+        rigNote({{ ok: true, route: 'skintokens', unity_rig: 'Humanoid', bones: 22 }}, 'humanoid'),
+        rigNote({{ ok: true, route: 'template', unity_rig: 'Generic', bones: 18 }}, 'quadruped'),
+        rigNote({{ ok: false }}, 'humanoid'),
+        rigNote(null, 'none'),
+        previewUrl('/api/unity/x/preview.glb'),
+        STAGE_META.stages,
+      ]));
+    """
+    result = subprocess.run([NODE, "--input-type=module", "--eval", program],
+                            check=True, capture_output=True, text=True)
+    human, generic, failed, prop, url, stages = json.loads(result.stdout)
+    assert "Humanoid" in human and "SkinTokens" in human and "22 bones" in human
+    assert "Generic" in generic and "template" in generic
+    assert "failed" in failed
+    assert prop.startswith("Prop")
+    assert url.startswith("/viewer/index.html?") and "restricted=1" in url
+    assert stages == ["generate", "finish", "rig", "export"]

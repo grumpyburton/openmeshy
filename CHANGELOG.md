@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   then a template skeleton fitted to the mesh's proportions if the learned rig fails the
   check. Humanoids get Mixamo bone names; other creatures get a Generic rig. A
   `.autorig.json` records the route, the problems found and each tool's licence.
+- **Image → Unity, in one go.** A new tab (and `scripts/image_to_unity.py`) takes one
+  picture to a rigged, textured, Unity-ready download: Pixal3D, Finish, auto-rig and
+  Unity export, with each stage's progress, a preview of the rigged model and a
+  `run.json` naming every component's licence.
 - **SkinTokens in Setup & Status.** The automatic rigger installs from its own card, or
   with `scripts/bootstrap_skintokens.py`: a pinned Rust build plus the 1.1 GB checkpoint,
   named, sized and asked for before anything downloads.

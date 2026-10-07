@@ -173,6 +173,7 @@ The `*_pose.py` files are pure curve maths with no `bpy`, which is why they have
 
 | Script | What it does |
 |---|---|
+| `image_to_unity.py` | One image in, a rigged Unity-ready character out: generate, finish, rig, export. |
 | `autorig.py` | Rig a finished GLB automatically: SkinTokens first, a Blender template if that fails. |
 | `blender_autorig_template.py` | Rig a character or creature with a template skeleton fitted to its bounding box. |
 | `unity_export.py` | Turn a GLB (rigged or not) into a folder Unity imports ready to use: FBX, textures, manifest. |
