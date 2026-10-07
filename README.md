@@ -275,6 +275,60 @@ much smaller web-ready file. The prompt that works and what was measured are in
 [`docs/prop-sheets.md`](docs/prop-sheets.md). Built and contributed by
 [@AdrielSantana](https://github.com/AdrielSantana).
 
+## Image → Unity
+
+The **Image → Unity** tab takes one picture to a textured, rigged model that imports into
+Unity ready to animate. It runs four steps: Pixal3D generates the model, Finish cleans it up,
+SkinTokens auto-rigs it, and an FBX export packages it. Humanoids get a Unity Humanoid
+rig, so Mixamo animations retarget onto them. Creatures get a Generic rig. Props skip
+rigging. From a terminal:
+
+```bash
+python scripts/image_to_unity.py hero.png output/unity/hero --class humanoid
+```
+
+Copy `unity/OpenMeshy/Editor/OpenMeshyImporter.cs` into your Unity project once. It sets up
+the rig, scale and URP materials on import. Full guide: [`docs/unity.md`](docs/unity.md).
+
+## Use it from Claude (MCP)
+
+An [MCP](https://modelcontextprotocol.io) server lets Claude Code run the whole pipeline
+for you. For example: "turn `concepts/knight.png` into a rigged Humanoid and add it
+to this Unity project".
+
+**1. Install the MCP package** (once, into the lab's Python):
+
+```bash
+.venv/bin/python -m pip install -r requirements-mcp.txt
+```
+
+**2. Add it to Claude Code.** Choose one:
+
+- **This repo only:** nothing to do. The repo ships `.mcp.json`, so Claude Code started
+  here offers the `openmeshy` server. Approve it when asked.
+- **Every project** (e.g. your game's Unity project):
+
+  ```bash
+  claude mcp add --scope user -e PYTHONPATH=$PWD -- \
+      openmeshy $PWD/.venv/bin/python -m openmeshy_mcp.server
+  ```
+
+  Run it from this repo's folder, so `$PWD` is the repo path.
+
+**3. Check it:** `claude mcp get openmeshy` should say **Connected**. Restart any open
+Claude Code sessions so they pick it up.
+
+Claude then has tools for every step:
+- `image_to_unity`, `generate_3d`, `finish_model`, `autorig`, `export_unity`
+- `split_props`, `export_props_unity`, `install_to_unity`
+- `job_status`, `cancel_job`, `list_outputs`, `lab_status`
+- `render_preview`, which returns a picture Claude can look at
+
+The server starts the lab if it isn't running. Jobs share the lab's one-at-a-time queue
+and show up in its tabs. It never downloads weights: install models from Setup & Status
+first. If you keep data on another drive (`scripts/relocate_data.py`), that drive must be
+connected. Details: [`docs/mcp.md`](docs/mcp.md).
+
 ## Blender animation recipes
 
 The reusable Blender tooling lives in `scripts/blender_*.py`: import, inspect,
