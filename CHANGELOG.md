@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   other MCP clients: image → Unity, generate, finish, auto-rig, Unity export, prop split
   and export, job status, and a rendered preview Claude can look at. It drives the lab's
   HTTP API, so agent and browser jobs share one queue; it never downloads weights.
+  Works from any project: relative paths mean that project's files, outside files are
+  staged in, and `install_to_unity` drops a result into the current Unity project.
 - **Tool jobs in the lab.** `POST /api/tools/{autorig,unity_export,unity_export_props}`
   runs one step on files already on disk, through the same one-at-a-time queue.
 - **Quick previews.** `scripts/blender_preview.py` renders a front-and-side PNG of any

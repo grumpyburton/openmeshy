@@ -27,6 +27,8 @@ from openmeshy_mcp.client import (
     Lab,
     LabError,
     existing_file,
+    resolve_path,
+    stage_input,
     summarise,
 )
 
@@ -35,7 +37,8 @@ Local image -> 3D -> Unity pipeline (Pixal3D, Blender, SkinTokens). All on this 
 Typical flow: image_to_unity(image) -> job_status('unity', id, wait_seconds=600) until done
 -> render_preview(path) to look at it. One heavy job runs at a time; a 409 error means wait.
 Generation takes ~12-15 min; finish ~30 s; autorig ~1 min; Unity export seconds.
-Paths may be absolute or relative to the repo. Results land under output/ in the repo.
+Paths may be absolute or relative to the current project. Results land under the
+OpenMeshy repo's output/; install_to_unity copies a finished Unity folder into a project.
 Prop sheets (a grid of separate props in one image): generate_3d, then split_props with
 names in reading order, then export_props_unity on the finished folder.
 """
@@ -53,6 +56,20 @@ def _started(kind: str, response: dict[str, Any], wait_seconds: float) -> dict[s
     else:
         result["next"] = f"job_status('{kind}', '{job_id}', wait_seconds=600)"
     return result
+
+
+def _lab_file(value: str, suffixes: set[str], what: str) -> str:
+    """A path the lab's tool jobs can read: resolved, checked, staged in if foreign."""
+    from image_to_3dlab.data_root import data_root
+
+    path = existing_file(value, suffixes, what)
+    root = data_root()
+    allowed = (REPO,) if root is None else (REPO, root)
+    return str(stage_input(path, REPO / "output" / "mcp" / "inputs", allowed))
+
+
+def _project(value: str) -> str:
+    return str(resolve_path(value)) if value else ""
 
 
 def _call(fn, *args, **kwargs) -> dict[str, Any]:
@@ -132,7 +149,8 @@ def autorig(model: str, rig_class: str = "humanoid", seed: int = 0,
     """Give a finished GLB a skeleton and skin weights: SkinTokens, else a template rig.
     rig_class: humanoid, quadruped or custom. Try another seed if the rig looks wrong."""
     return _call(lambda: _started("tool", lab.post_json(
-        "/api/tools/autorig", {"model": model, "class": rig_class, "seed": seed}),
+        "/api/tools/autorig", {"model": _lab_file(model, {".glb"}, "model"),
+                               "class": rig_class, "seed": seed}),
         wait_seconds))
 
 
@@ -143,10 +161,12 @@ def export_unity(model: str, rig_class: str = "humanoid", name: str = "",
     """GLB -> Unity folder: FBX (1:1 scale, feet at origin, facing +Z), URP textures and
     a manifest the bundled OpenMeshyImporter.cs reads. `lods`: extra LOD GLBs (become a
     LODGroup). `unity_project`: copy straight into that project's Assets/OpenMeshy/."""
-    body = {"model": model, "class": rig_class, "name": name, "lods": lods or [],
-            "height": height_m, "unity_project": unity_project}
-    return _call(lambda: _started("tool", lab.post_json("/api/tools/unity_export", body),
-                                  wait_seconds))
+    def go() -> dict[str, Any]:
+        body = {"model": _lab_file(model, {".glb"}, "model"), "class": rig_class,
+                "name": name, "lods": [_lab_file(p, {".glb"}, "lod") for p in lods or []],
+                "height": height_m, "unity_project": _project(unity_project)}
+        return _started("tool", lab.post_json("/api/tools/unity_export", body), wait_seconds)
+    return _call(go)
 
 
 @server.tool()
@@ -166,9 +186,29 @@ def export_props_unity(finished_dir: str, unity_project: str = "",
                        wait_seconds: float = 300) -> dict[str, Any]:
     """Export every finished prop (split_props output, `<prop>/<prop>_LOD<n>.glb`) to
     Unity: one FBX per prop with its LODs inside."""
-    body = {"finished_dir": finished_dir, "unity_project": unity_project}
+    body = {"finished_dir": str(resolve_path(finished_dir)),
+            "unity_project": _project(unity_project)}
     return _call(lambda: _started("tool", lab.post_json("/api/tools/unity_export_props", body),
                                   wait_seconds))
+
+
+@server.tool()
+def install_to_unity(unity_folder: str, unity_project: str = ".") -> dict[str, Any]:
+    """Copy a finished Unity folder (the one holding NAME.fbx + NAME.openmeshy.json, from
+    image_to_unity or export_unity) into a Unity project's Assets/OpenMeshy/, and install
+    the OpenMeshyImporter.cs that sets it up on import. unity_project defaults to the
+    current project."""
+    from image_to_3dlab.unity_export import install_into_project
+
+    try:
+        folder = resolve_path(unity_folder)
+        if not any(folder.glob("*.openmeshy.json")):
+            return {"error": f"{folder} is not an OpenMeshy Unity folder (no *.openmeshy.json)"}
+        dest = install_into_project(folder, resolve_path(unity_project))
+        return {"installed": str(dest),
+                "next": "Switch to Unity; it imports with the rig, scale and materials set."}
+    except ValueError as exc:
+        return {"error": str(exc)}
 
 
 @server.tool()

@@ -88,12 +88,17 @@ def test_image_to_unity_posts_settings_and_returns_job(fake, tmp_path):
     assert result["job_id"] == "b" * 32 and "job_status('unity'" in result["next"]
 
 
-def test_tools_post_json_and_wait(fake):
-    result = server.autorig("output/x.glb", rig_class="humanoid", wait_seconds=10)
-    assert fake.posts[0] == ("/api/tools/autorig", {"model": "output/x.glb", "class": "humanoid", "seed": 0})
+def test_tools_post_json_and_wait(fake, tmp_path, monkeypatch):
+    monkeypatch.setattr("image_to_3dlab.data_root.data_root", lambda: tmp_path)
+    model, lod = tmp_path / "x.glb", tmp_path / "l1.glb"
+    model.write_bytes(b"g")
+    lod.write_bytes(b"g")
+    result = server.autorig(str(model), rig_class="humanoid", wait_seconds=10)
+    assert fake.posts[0] == ("/api/tools/autorig", {"model": str(model), "class": "humanoid", "seed": 0})
     assert result["status"] == "done"
-    server.export_unity("m.glb", rig_class="none", lods=["l1.glb"], unity_project="/p")
-    assert fake.posts[1][1]["lods"] == ["l1.glb"] and fake.posts[1][1]["unity_project"] == "/p"
+    server.export_unity(str(model), rig_class="none", lods=[str(lod)], unity_project="/p")
+    assert fake.posts[1][1]["lods"] == [str(lod)] and fake.posts[1][1]["unity_project"] == "/p"
+    assert "error" in server.autorig(str(tmp_path / "missing.glb"))
 
 
 def test_job_status_downloads_finished_glb(fake, tmp_path):
@@ -119,3 +124,37 @@ def test_recent_runs(tmp_path):
     (run / "unity" / "hero.zip").write_text("x")
     runs = server.recent_runs(tmp_path, 5)
     assert runs[0]["kind"] == "unity" and len(runs[0]["files"]) == 2
+
+
+def test_relative_paths_prefer_the_callers_project(tmp_path, monkeypatch):
+    (tmp_path / "art").mkdir()
+    (tmp_path / "art" / "hero.png").write_bytes(b"x")
+    assert client.resolve_path("art/hero.png", cwd=tmp_path) == tmp_path / "art" / "hero.png"
+    assert client.resolve_path("scripts/autorig.py", cwd=tmp_path) == client.REPO / "scripts" / "autorig.py"
+    assert client.resolve_path("/abs/x.glb", cwd=tmp_path) == client.Path("/abs/x.glb")
+
+
+def test_foreign_files_are_staged_inside(tmp_path):
+    inside_root, outside = tmp_path / "repo", tmp_path / "game"
+    (inside_root / "output").mkdir(parents=True)
+    outside.mkdir()
+    own = inside_root / "output" / "a.glb"
+    own.write_bytes(b"a")
+    theirs = outside / "b.glb"
+    theirs.write_bytes(b"b")
+    staging = inside_root / "output" / "mcp" / "inputs"
+    assert client.stage_input(own, staging, (inside_root,)) == own
+    staged = client.stage_input(theirs, staging, (inside_root,))
+    assert staging in staged.parents and staged.read_bytes() == b"b"
+
+
+def test_install_to_unity(fake, tmp_path):
+    folder = tmp_path / "hero"
+    folder.mkdir()
+    (folder / "hero.openmeshy.json").write_text("{}")
+    project = tmp_path / "Game"
+    (project / "Assets").mkdir(parents=True)
+    (project / "ProjectSettings").mkdir()
+    result = server.install_to_unity(str(folder), str(project))
+    assert result["installed"].endswith("Assets/OpenMeshy/hero")
+    assert "error" in server.install_to_unity(str(tmp_path), str(project))

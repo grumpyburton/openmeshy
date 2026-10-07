@@ -11,11 +11,18 @@ character and put it in `~/MyGame`".
 ```
 
 This repo ships `.mcp.json`, so Claude Code started in this folder offers the
-`openmeshy` server; approve it when asked. From anywhere else:
+`openmeshy` server; approve it when asked. To use it in every project (a game's Unity
+project, say), add it once at user level:
 
 ```bash
-claude mcp add openmeshy -- /path/to/repo/.venv/bin/python -m openmeshy_mcp.server
+claude mcp add --scope user -e PYTHONPATH=/path/to/repo -- \
+    openmeshy /path/to/repo/.venv/bin/python -m openmeshy_mcp.server
 ```
+
+In another project, relative paths mean that project's files. Pictures and models from
+outside the repo are copied into `output/mcp/inputs/` for the lab, results land in the
+repo's `output/`, and `install_to_unity(folder)` drops a result into the current Unity
+project (`Assets/OpenMeshy/<name>/`, importer included).
 
 The server starts the lab (`viewer/serve.py`) itself if it is not running.
 
@@ -30,6 +37,7 @@ The server starts the lab (`viewer/serve.py`) itself if it is not running.
 | `export_unity` | GLB (+ LODs) → FBX, URP textures, manifest; optional copy into a project | seconds |
 | `split_props` | prop-sheet GLB → separate named props with LODs | minutes |
 | `export_props_unity` | every finished prop → one FBX each, LODGroup-ready | ~1 min |
+| `install_to_unity` | copy a finished Unity folder (+ importer) into a Unity project | instant |
 | `job_status` / `cancel_job` | follow or stop a job; `wait_seconds` blocks up to 15 min | |
 | `render_preview` | front + side picture of a GLB, returned as an image | ~3 s |
 | `list_outputs`, `lab_status` | recent results; what is installed | |

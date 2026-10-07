@@ -48,10 +48,31 @@ def encode_multipart(fields: dict[str, str], files: dict[str, Path]) -> tuple[by
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
-def existing_file(value: str, suffixes: set[str] | None = None, what: str = "file") -> Path:
+def resolve_path(value: str, cwd: Path | None = None) -> Path:
+    """Absolute as given; relative to the caller's project (the server's working folder,
+    which Claude Code sets to the project it is in) first, then to this repo."""
     path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = REPO / path
+    if path.is_absolute():
+        return path
+    here = (cwd or Path.cwd()) / path
+    return here if here.exists() else REPO / path
+
+
+def stage_input(path: Path, root: Path, allowed: tuple[Path, ...]) -> Path:
+    """The lab's single-step tools only read files inside the repo or the data drive. A
+    file from another project is copied into `root` (output/mcp/inputs) first; a GLB's
+    sibling folders are not needed, since GLBs are self-contained."""
+    normal = Path(os.path.normpath(path))
+    if any(normal == a or a in normal.parents for a in allowed):
+        return normal
+    dest = root / uuid.uuid4().hex[:8] / path.name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(path.read_bytes())
+    return dest
+
+
+def existing_file(value: str, suffixes: set[str] | None = None, what: str = "file") -> Path:
+    path = resolve_path(value)
     if not path.is_file():
         raise ValueError(f"{what} not found: {path}")
     if suffixes and path.suffix.lower() not in suffixes:
