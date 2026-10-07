@@ -33,9 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Before generate_api: it reads HF_HOME and friends at import time.
-from image_to_3dlab.data_root import apply_env
+from image_to_3dlab.data_root import apply_env, missing_root_help
 
-apply_env()
+_problem = missing_root_help(apply_env())
+if _problem:
+    raise SystemExit(_problem)
 
 from generate_api import OUTPUT_ROOT, Handler, _reconcile_orphaned_jobs, _terminate_active_job
 

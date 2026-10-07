@@ -73,3 +73,10 @@ def test_importing_the_package_applies_the_root(tmp_path):
         env=env, cwd=dr.REPO, capture_output=True, text=True, check=True,
     ).stdout.strip()
     assert out == str(tmp_path / "hf")
+
+
+def test_missing_root_is_explained(tmp_path):
+    assert dr.missing_root_help(None) is None
+    assert dr.missing_root_help(tmp_path) is None
+    message = dr.missing_root_help(tmp_path / "unplugged")
+    assert "not there" in message and "hdiutil attach" in message

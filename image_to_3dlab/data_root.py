@@ -68,6 +68,19 @@ def data_root(environ: MutableMapping[str, str] | None = None, repo: Path = REPO
     return Path(value).expanduser() if value else None
 
 
+def missing_root_help(root: Path | None) -> str | None:
+    """Why the configured data drive cannot be used, in words, or None when it can.
+
+    An unplugged drive or an unmounted disk image leaves every symlink dangling, and the
+    failure then surfaces far away as a missing venv or weight file.
+    """
+    if root is None or root.is_dir():
+        return None
+    return (f"The data drive {root} is not there. Plug the drive in (or attach its disk "
+            f"image, e.g. `hdiutil attach /Volumes/<drive>/<name>.sparsebundle`), then try "
+            f"again. Set {ENV_VAR} or edit {POINTER_FILE} to move it.")
+
+
 def cache_env(root: Path) -> dict[str, str]:
     """Cache environment variables pointing into ``root``."""
     return {name: str(root / folder) for name, folder in CACHE_DIRS.items()}
