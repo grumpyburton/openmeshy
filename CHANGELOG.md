@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automatic rigging.** `scripts/autorig.py` gives a finished GLB a skeleton and skin
+  weights with no hand fitting: SkinTokens (VAST-AI's TokenRig, MIT, on Metal) first,
+  then a template skeleton fitted to the mesh's proportions if the learned rig fails the
+  check. Humanoids get Mixamo bone names; other creatures get a Generic rig. A
+  `.autorig.json` records the route, the problems found and each tool's licence.
+- **Unity export.** `scripts/unity_export.py` writes an FBX in Unity's axes and real-world
+  scale (humanoids 1.8 m), textures packed the way URP Lit wants them, and a manifest.
+  `unity/OpenMeshy/Editor/OpenMeshyImporter.cs` reads it on import: Humanoid or Generic
+  rig, axis conversion, normal maps flagged and URP materials built. `--unity-project`
+  copies both into a project.
 - **Keep the big stuff on another drive.** `scripts/relocate_data.py /Volumes/X/i2l`
   moves `vendor/`, `output/`, `.venv/` and the Hunyuan weights there as symlinks and
   writes the path to `.i2l-data`. The lab and `pipeline.py` then point every model cache
