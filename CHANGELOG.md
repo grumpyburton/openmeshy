@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picture to a rigged, textured, Unity-ready download: Pixal3D, Finish, auto-rig and
   Unity export, with each stage's progress, a preview of the rigged model and a
   `run.json` naming every component's licence.
+- **MCP server for agents.** `openmeshy_mcp/` exposes the pipeline to Claude Code and
+  other MCP clients: image → Unity, generate, finish, auto-rig, Unity export, prop split
+  and export, job status, and a rendered preview Claude can look at. It drives the lab's
+  HTTP API, so agent and browser jobs share one queue; it never downloads weights.
+- **Tool jobs in the lab.** `POST /api/tools/{autorig,unity_export,unity_export_props}`
+  runs one step on files already on disk, through the same one-at-a-time queue.
+- **Quick previews.** `scripts/blender_preview.py` renders a front-and-side PNG of any
+  GLB in a couple of seconds.
 - **Prop sheets to Unity.** `scripts/unity_export_props.py` exports every finished prop as
   one FBX with its LODs inside, named so Unity builds a LODGroup per prop on import.
   `scripts/unity_export.py --lod` does the same for any one model.

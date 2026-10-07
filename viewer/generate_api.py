@@ -72,6 +72,13 @@ from finish_api import (
     run_job as run_finish_job,
     status_payload as finish_status_payload,
 )
+from tools_api import (
+    TOOL_JOBS,
+    TOOLS,
+    cancel_job as cancel_tool_job,
+    run_job as run_tool_job,
+    status_payload as tool_status_payload,
+)
 from unity_api import (
     ARTIFACTS as UNITY_ARTIFACTS,
     UNITY_JOBS,
@@ -1087,6 +1094,9 @@ def _terminate_active_job() -> None:
     finish_job = FINISH_JOBS.get(FINISH_JOBS.active) if FINISH_JOBS.active else None
     if finish_job is not None and finish_job.process is not None and finish_job.process.poll() is None:
         _killpg_if_alive(finish_job.process.pid)
+    tool_job = TOOL_JOBS.get(TOOL_JOBS.active) if TOOL_JOBS.active else None
+    if tool_job is not None and tool_job.process is not None and tool_job.process.poll() is None:
+        _killpg_if_alive(tool_job.process.pid)
     unity_job = UNITY_JOBS.get(UNITY_JOBS.active) if UNITY_JOBS.active else None
     if unity_job is not None and unity_job.process is not None and unity_job.process.poll() is None:
         _killpg_if_alive(unity_job.process.pid)
@@ -2017,6 +2027,21 @@ class Handler(SimpleHTTPRequestHandler):
         if len(parts) == 5 and parts[:3] == ["api", "finish", "runs"] and parts[4] == "resume":
             self._resume_finish_job(parts[3])
             return
+        if len(parts) == 3 and parts[:2] == ["api", "tools"] and parts[2] in TOOLS:
+            self._create_tool_job(parts[2])
+            return
+        if len(parts) == 4 and parts[:2] == ["api", "tools"] and parts[3] == "cancel":
+            job = TOOL_JOBS.get(parts[2])
+            if job is None:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            try:
+                cancel_tool_job(job)
+            except RuntimeError as exc:
+                self._send_json(409, {"error": str(exc)})
+                return
+            self._send_json(202, {"job_id": job.id, "status": job.status})
+            return
         if parts == ["api", "unity"]:
             self._create_unity_job()
             return
@@ -2278,6 +2303,17 @@ class Handler(SimpleHTTPRequestHandler):
             if action in FINISH_ARTIFACTS:
                 self._finish_artifact(job_id, action)
                 return
+        if len(parts) == 4 and parts[:2] == ["api", "tools"]:
+            job = TOOL_JOBS.get(parts[2])
+            if job is None:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            if parts[3] == "events":
+                self._stream_events(job)
+                return
+            if parts[3] == "status":
+                self._send_json(200, tool_status_payload(job))
+                return
         if len(parts) == 4 and parts[:2] == ["api", "unity"]:
             job = UNITY_JOBS.get(parts[2])
             if job is None:
@@ -2380,6 +2416,9 @@ class Handler(SimpleHTTPRequestHandler):
             if UNITY_JOBS.busy():
                 self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
                 return
+            if TOOL_JOBS.busy():
+                self._send_json(409, {"error": "a tool job is running; wait for it to finish"})
+                return
             try:
                 settings = spec.validate_settings(raw_settings)
             except ValueError as exc:
@@ -2454,6 +2493,9 @@ class Handler(SimpleHTTPRequestHandler):
             if UNITY_JOBS.busy():
                 self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
                 return
+            if TOOL_JOBS.busy():
+                self._send_json(409, {"error": "a tool job is running; wait for it to finish"})
+                return
             if SETUP_ACTIVE is not None:
                 self._send_json(409, {"error": "setup is running; wait for it to finish"})
                 return
@@ -2512,6 +2554,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             if UNITY_JOBS.busy():
                 self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
+                return
+            if TOOL_JOBS.busy():
+                self._send_json(409, {"error": "a tool job is running; wait for it to finish"})
                 return
             length = int(self.headers.get("Content-Length", "0"))
             if length <= 0 or length > 768 * 1024 * 1024:
@@ -2621,6 +2666,9 @@ class Handler(SimpleHTTPRequestHandler):
             if UNITY_JOBS.busy():
                 self._send_json(409, {"error": "an Image -> Unity run is going; wait for it to finish"})
                 return
+            if TOOL_JOBS.busy():
+                self._send_json(409, {"error": "a tool job is running; wait for it to finish"})
+                return
         try:
             if find_blender() is None:
                 raise RuntimeError(blender_missing_help())
@@ -2655,6 +2703,7 @@ class Handler(SimpleHTTPRequestHandler):
                  "a finishing run is going"),
                 (SETUP_ACTIVE is not None, "setup is running"),
                 (_props_baking(), "a prop sheet is baking"),
+                (TOOL_JOBS.busy(), "a tool job is running"),
             ):
                 if busy:
                     self._send_json(409, {"error": f"{what}; wait for it to finish"})
@@ -2694,6 +2743,44 @@ class Handler(SimpleHTTPRequestHandler):
                 "events_url": f"/api/unity/{job.id}/events",
                 "status_url": f"/api/unity/{job.id}/status",
             })
+        except Exception as exc:
+            self._send_json(500, {"error": str(exc)})
+
+    def _create_tool_job(self, tool: str) -> None:
+        """One step on files already on this machine (tools_api.py): for agents."""
+        try:
+            active = JOBS.get(JOBS.active) if JOBS.active else None
+            if active is not None and active.status in {"queued", "running", "cancelling"}:
+                self._send_json(409, {"error": "a generation is running; wait for it to finish"})
+                return
+            if UNITY_JOBS.busy() or _props_baking() or SETUP_ACTIVE is not None:
+                self._send_json(409, {"error": "another job is running; wait for it to finish"})
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            if length > 1024 * 1024:
+                self._send_json(400, {"error": "request body too large"})
+                return
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError as exc:
+                self._send_json(422, {"error": f"invalid JSON: {exc}"})
+                return
+            if not isinstance(body, dict):
+                self._send_json(422, {"error": "body must be a JSON object"})
+                return
+            try:
+                job = TOOL_JOBS.create(tool, body)
+            except ValueError as exc:
+                self._send_json(422, {"error": str(exc)})
+                return
+            except RuntimeError as exc:
+                self._send_json(409, {"error": str(exc)})
+                return
+            threading.Thread(target=run_tool_job, args=(job,), daemon=True,
+                             name=f"tool-{job.id[:8]}").start()
+            self._send_json(202, {"job_id": job.id, "tool": tool,
+                                  "status_url": f"/api/tools/{job.id}/status",
+                                  "events_url": f"/api/tools/{job.id}/events"})
         except Exception as exc:
             self._send_json(500, {"error": str(exc)})
 

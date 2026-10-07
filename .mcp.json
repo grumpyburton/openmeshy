@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "openmeshy": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "openmeshy_mcp.server"],
+      "env": {}
+    }
+  }
+}

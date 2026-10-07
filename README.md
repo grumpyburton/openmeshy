@@ -16,6 +16,9 @@ game or whatever else you're up to. Nothing is uploaded to a cloud service.
 - **Image → Unity in one go.** One picture becomes a rigged, textured model that imports
   into Unity ready to animate: Humanoid rigs take Mixamo animations, creatures get Generic
   rigs. [More](docs/unity.md)
+- **Claude can drive it.** An MCP server (`openmeshy_mcp/`) gives Claude Code tools for
+  every step: image → Unity, generate, finish, rig, export, split props, preview.
+  [More](docs/mcp.md)
 - **Low poly, high quality.** Pixel Match puts your picture's real pixels back on the
   model, so text, logos and faces stay sharp even after it is cut to ~5k faces.
   [More](#finishing-an-asset)
