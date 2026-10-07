@@ -48,7 +48,7 @@ namespace OpenMeshy
     {
         const string Suffix = ".openmeshy.json";
 
-        public override uint GetVersion() => 1;
+        public override uint GetVersion() => 2;
 
         static string ManifestPath(string modelPath) =>
             Path.Combine(Path.GetDirectoryName(modelPath) ?? "",
@@ -120,7 +120,12 @@ namespace OpenMeshy
             if (manifest?.materials == null) return;
             var entry = Array.Find(manifest.materials, m => m.name == description.materialName)
                         ?? (manifest.materials.Length == 1 ? manifest.materials[0] : null);
-            if (entry == null) return;
+            if (entry == null)
+            {
+                Debug.LogWarning($"OpenMeshy: {assetPath} has material '{description.materialName}', "
+                                 + "which its manifest does not list; left as Unity made it.");
+                return;
+            }
 
             var urp = Shader.Find("Universal Render Pipeline/Lit");
             material.shader = urp != null ? urp : Shader.Find("Standard");

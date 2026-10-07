@@ -33,3 +33,14 @@ def test_main_needs_props(tmp_path):
 
     with pytest.raises(SystemExit):
         props.main([str(tmp_path), str(tmp_path / "out")])
+
+
+def test_parse_heights():
+    import pytest
+
+    assert props.parse_heights("wagon=2.6, stump=0.8") == {"wagon": 2.6, "stump": 0.8}
+    assert props.parse_heights("") == {}
+    with pytest.raises(ValueError):
+        props.parse_heights("wagon")
+    with pytest.raises(ValueError):
+        props.parse_heights("wagon=900")

@@ -53,11 +53,31 @@ def parse_marker(text: str) -> dict:
     raise RuntimeError("Blender export printed no I2L_UNITY_EXPORT line")
 
 
+def ensure_png(path: Path) -> bool:
+    """Re-encode a texture as real PNG if it is not one; True when it was rewritten.
+
+    Blender saves a packed image in the format it was packed in, whatever the file is
+    called, so a GLB with WebP or JPEG textures left `.png` files Unity cannot read.
+    """
+    from PIL import Image
+
+    with Image.open(path) as image:
+        if image.format == "PNG":
+            return False
+        image.load()
+        converted = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+    converted.save(path, "PNG")
+    return True
+
+
 def finish_textures(out_dir: Path, materials: list[dict]) -> list[dict]:
-    """Repack each raw metallic-roughness PNG into URP's metallic-smoothness map."""
+    """Make every texture real PNG, then repack each raw metallic-roughness map into
+    URP's metallic-smoothness map."""
     from PIL import Image
 
     textures = out_dir / "textures"
+    for path in textures.glob("*.png"):
+        ensure_png(path)
     for mat in materials:
         raw = mat.pop("metalRough", None)
         if not raw:

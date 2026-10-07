@@ -140,3 +140,12 @@ def test_export_command_passes_lods():
     cmd = script.export_command(Path("/b"), Path("l0.glb"), Path("out"), "Crate", 0.0,
                                 [Path("l1.glb"), Path("l2.glb")])
     assert cmd[-3:] == ["--lod", "l1.glb", "l2.glb"]
+
+
+def test_ensure_png_rewrites_mislabelled_textures(tmp_path):
+    fake = tmp_path / "Body_baseColor.png"
+    Image.new("RGB", (4, 4), (10, 200, 30)).save(fake, "WEBP")
+    assert script.ensure_png(fake) is True
+    with Image.open(fake) as im:
+        assert im.format == "PNG" and im.getpixel((0, 0))[1] > 150
+    assert script.ensure_png(fake) is False

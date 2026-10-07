@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Unity exports of models with WebP or JPEG textures.** Blender kept a packed image's
+  own format whatever the file was called, so Unity got `.png` files it could not read.
+  Every exported texture is now checked and re-encoded as real PNG.
+
 ### Added
 - **Automatic rigging.** `scripts/autorig.py` gives a finished GLB a skeleton and skin
   weights with no hand fitting: SkinTokens (VAST-AI's TokenRig, MIT, on Metal) first,
@@ -29,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   GLB in a couple of seconds.
 - **Prop sheets to Unity.** `scripts/unity_export_props.py` exports every finished prop as
   one FBX with its LODs inside, named so Unity builds a LODGroup per prop on import.
-  `scripts/unity_export.py --lod` does the same for any one model.
+  `scripts/unity_export.py --lod` does the same for any one model. `--heights
+  wagon=2.6,stump=0.8` gives props real-world sizes.
 - **SkinTokens in Setup & Status.** The automatic rigger installs from its own card, or
   with `scripts/bootstrap_skintokens.py`: a pinned Rust build plus the 1.1 GB checkpoint,
   named, sized and asked for before anything downloads.

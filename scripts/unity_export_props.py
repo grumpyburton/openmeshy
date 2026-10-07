@@ -7,7 +7,8 @@
 Reads `scripts/finish_props.py`'s output (`<prop>/<prop>_LOD<n>.glb`) and runs
 `scripts/unity_export.py` on each prop with all its LODs, so Unity builds a LODGroup per
 prop on import. Props keep the size they were generated at; Unity's pivot sits at each
-prop's base. Writes `OUT_DIR/<prop>/` per prop and `OUT_DIR/props.unity.json`.
+prop's base. Generated sizes are arbitrary, so `--heights wagon=2.6,stump=0.8` sets
+real ones in metres. Writes `OUT_DIR/<prop>/` per prop and `OUT_DIR/props.unity.json`.
 """
 
 from __future__ import annotations
@@ -42,20 +43,40 @@ def find_props(finished: Path) -> dict[str, list[Path]]:
     return {prop: [p for _, p in sorted(levels)] for prop, levels in sorted(props.items())}
 
 
+def parse_heights(text: str) -> dict[str, float]:
+    """'wagon=2.6, stump=0.8' -> {'wagon': 2.6, 'stump': 0.8}."""
+    heights = {}
+    for item in filter(None, (part.strip() for part in text.split(","))):
+        name, sep, value = item.partition("=")
+        if not sep:
+            raise ValueError(f"--heights wants name=metres, got {item!r}")
+        metres = float(value)
+        if not 0.01 <= metres <= 100:
+            raise ValueError(f"{name}: height must be 0.01-100 m, got {metres}")
+        heights[name.strip()] = metres
+    return heights
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("finished", type=Path, help="finish_props.py's OUT_DIR")
     parser.add_argument("out_dir", type=Path)
     parser.add_argument("--unity-project", type=Path, help="copy every prop into this project")
+    parser.add_argument("--heights", default="", help="real heights, e.g. wagon=2.6,stump=0.8")
     args = parser.parse_args(argv)
+    heights = parse_heights(args.heights)
 
     props = find_props(args.finished)
     if not props:
         raise SystemExit(f"no <prop>/<prop>_LOD<n>.glb files under {args.finished}")
+    unknown = sorted(set(heights) - set(props))
+    if unknown:
+        raise SystemExit(f"--heights names props that are not there: {', '.join(unknown)}")
     summary = {}
     for prop, lods in props.items():
         out = args.out_dir / unity_export.safe_name(prop)
-        result = export_one.export(lods[0], out, prop, rig_class="none", lods=lods[1:])
+        result = export_one.export(lods[0], out, prop, rig_class="none", lods=lods[1:],
+                                   height=heights.get(prop))
         if args.unity_project:
             result["installed"] = str(unity_export.install_into_project(
                 out, args.unity_project.expanduser()))
