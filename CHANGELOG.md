@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   then a template skeleton fitted to the mesh's proportions if the learned rig fails the
   check. Humanoids get Mixamo bone names; other creatures get a Generic rig. A
   `.autorig.json` records the route, the problems found and each tool's licence.
+- **SkinTokens in Setup & Status.** The automatic rigger installs from its own card, or
+  with `scripts/bootstrap_skintokens.py`: a pinned Rust build plus the 1.1 GB checkpoint,
+  named, sized and asked for before anything downloads.
 - **Unity export.** `scripts/unity_export.py` writes an FBX in Unity's axes and real-world
   scale (humanoids 1.8 m), textures packed the way URP Lit wants them, and a manifest.
   `unity/OpenMeshy/Editor/OpenMeshyImporter.cs` reads it on import: Humanoid or Generic

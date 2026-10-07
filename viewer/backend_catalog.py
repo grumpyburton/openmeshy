@@ -32,6 +32,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from image_to_3dlab import autorig as _autorig
 from image_to_3dlab import host as _host
 from image_to_3dlab import matte as _matte
 from image_to_3dlab.host import APPLE, NVIDIA
@@ -556,6 +557,29 @@ CATALOG: tuple[Backend, ...] = (
             WeightSet("BiRefNet-lite", _matte.LITE_URL, _matte.LITE_BYTES,
                       _matte.model_file(_matte.LITE_MODEL),
                       note="One file, used by Pixal3D, TRELLIS and SF3D alike."),
+        ),
+    ),
+    Backend(
+        id="skintokens",
+        label="Automatic rigger (SkinTokens)",
+        kind="tool",
+        best_for=("Gives a finished model a skeleton and skin weights, ready to animate: "
+                  "Mixamo-named humanoids for Unity's Humanoid avatar, Generic rigs for "
+                  "creatures."),
+        tradeoff=("Optional. Without it, rigging falls back to a template skeleton fitted "
+                  "to the model's proportions."),
+        license_name="MIT (weights and most source); built binary GPL-3.0",
+        license_url="https://huggingface.co/VAST-AI/SkinTokens",
+        install="scripts/bootstrap_skintokens.py",
+        setup_minutes=10,
+        caveat=("Builds with Rust; installs a Rust toolchain (about 600 MB) if there is "
+                "none. The binary runs as a separate program, so its GPL does not reach "
+                "this repo or your rigs."),
+        build_probes=(_autorig.skintokens_binary(),),
+        weights=(
+            WeightSet("SkinTokens checkpoint (TokenRig grpo_1400)", "VAST-AI/SkinTokens",
+                      1_131_000_000,
+                      _autorig.skintokens_home() / "weights" / "grpo_1400.ckpt"),
         ),
     ),
 )
