@@ -30,11 +30,15 @@ from image_to_3dlab.blender import find_blender
 SCRIPTS = REPO / "scripts"
 
 
-def export_command(blender: Path, source: Path, out_dir: Path, name: str, height: float) -> list[str]:
+def export_command(blender: Path, source: Path, out_dir: Path, name: str, height: float,
+                   lods: list[Path] | None = None) -> list[str]:
     """Blender measures and scales the model itself: only it sees the scene the FBX holds."""
-    return [str(blender), "--background", "--python-exit-code", "1",
-            "--python", str(SCRIPTS / "blender_unity_export.py"), "--",
-            str(source), str(out_dir), name, f"{height:.4f}"]
+    command = [str(blender), "--background", "--python-exit-code", "1",
+               "--python", str(SCRIPTS / "blender_unity_export.py"), "--",
+               str(source), str(out_dir), name, f"{height:.4f}"]
+    if lods:
+        command += ["--lod", *map(str, lods)]
+    return command
 
 
 def target_height(rig_class: str, height: float | None) -> float:
@@ -69,13 +73,14 @@ def finish_textures(out_dir: Path, materials: list[dict]) -> list[dict]:
 
 
 def export(source: Path, out_dir: Path, name: str, rig_class: str = "humanoid",
-           height: float | None = None, autorig_record: dict | None = None) -> dict:
+           height: float | None = None, autorig_record: dict | None = None,
+           lods: list[Path] | None = None) -> dict:
     blender = find_blender()
     if blender is None:
         raise SystemExit("Blender not found. Install Blender 4.2+ or set I2L_BLENDER.")
     out_dir.mkdir(parents=True, exist_ok=True)
     process = subprocess.run(export_command(blender, source, out_dir, name,
-                                            target_height(rig_class, height)),
+                                            target_height(rig_class, height), lods),
                              capture_output=True, text=True, check=False)
     if process.returncode != 0:
         tail = "\n".join((process.stdout + process.stderr).splitlines()[-20:])
@@ -91,7 +96,7 @@ def export(source: Path, out_dir: Path, name: str, rig_class: str = "humanoid",
     unity_export.write_manifest(path, manifest)
     return {"manifest": str(path), "fbx": result["fbx"], "rig": rig, "scale": result["scale"],
             "height_m": round(result["height"], 3), "bones": result["bones"],
-            "unweighted_vertices": result["unweighted_vertices"]}
+            "unweighted_vertices": result["unweighted_vertices"], "lods": result.get("lods", 1)}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--height", type=float, help="target height in metres")
     parser.add_argument("--autorig-record", type=Path,
                         help="the .autorig.json from scripts/autorig.py (default: beside SOURCE)")
+    parser.add_argument("--lod", type=Path, nargs="+", default=[],
+                        help="further levels of detail after SOURCE (LOD1, LOD2...)")
     parser.add_argument("--unity-project", type=Path, help="copy into this Unity project")
     parser.add_argument("--zip", action="store_true", help="also write OUT_DIR.zip")
     args = parser.parse_args(argv)
@@ -111,7 +118,8 @@ def main(argv: list[str] | None = None) -> int:
     record_path = args.autorig_record or args.source.with_suffix(".autorig.json")
     record = json.loads(record_path.read_text()) if record_path.is_file() else None
     name = args.name or args.out_dir.name
-    summary = export(args.source, args.out_dir, name, args.rig_class, args.height, record)
+    summary = export(args.source, args.out_dir, name, args.rig_class, args.height, record,
+                     args.lod)
     if args.zip:
         summary["zip"] = shutil.make_archive(str(args.out_dir), "zip", args.out_dir.parent,
                                              args.out_dir.name)

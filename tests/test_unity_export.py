@@ -121,3 +121,22 @@ def test_ground_offset_puts_feet_on_origin():
 
 def test_facing_turn_is_a_half_turn():
     assert bue.UNITY_FACING_TURN == 180.0
+
+
+def test_blender_args_with_lods():
+    assert bue.parse_args(["a.glb", "out", "Crate", "0"]) == (["a.glb"], "out", "Crate", "0")
+    assert bue.parse_args(["a.glb", "out", "Crate", "0", "--lod", "b.glb", "c.glb"]) == (
+        ["a.glb", "b.glb", "c.glb"], "out", "Crate", "0")
+    with pytest.raises(SystemExit):
+        bue.parse_args(["a.glb", "out"])
+
+
+def test_lod_names_end_in_the_suffix_unity_reads():
+    assert bue.lod_object_name("crate", 2) == "crate_LOD2"
+    assert bue.lod_object_name("crate", 1, 3) == "crate_3_LOD1"
+
+
+def test_export_command_passes_lods():
+    cmd = script.export_command(Path("/b"), Path("l0.glb"), Path("out"), "Crate", 0.0,
+                                [Path("l1.glb"), Path("l2.glb")])
+    assert cmd[-3:] == ["--lod", "l1.glb", "l2.glb"]

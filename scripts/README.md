@@ -177,6 +177,7 @@ The `*_pose.py` files are pure curve maths with no `bpy`, which is why they have
 | `autorig.py` | Rig a finished GLB automatically: SkinTokens first, a Blender template if that fails. |
 | `blender_autorig_template.py` | Rig a character or creature with a template skeleton fitted to its bounding box. |
 | `unity_export.py` | Turn a GLB (rigged or not) into a folder Unity imports ready to use: FBX, textures, manifest. |
+| `unity_export_props.py` | Export every finished prop of a prop sheet for Unity: one FBX per prop, its LODs inside. |
 | `blender_unity_export.py` | Export a (rigged) GLB as a Unity-ready FBX, with each material's textures as PNGs. |
 | `blender_joint_markers.py` | Spawn named joint markers on a mesh in Blender, and read their placed positions back. |
 | `blender_build_rig.py` | Build a quadruped armature from placed joint markers and bind the mesh to it. |

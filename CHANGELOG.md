@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picture to a rigged, textured, Unity-ready download: Pixal3D, Finish, auto-rig and
   Unity export, with each stage's progress, a preview of the rigged model and a
   `run.json` naming every component's licence.
+- **Prop sheets to Unity.** `scripts/unity_export_props.py` exports every finished prop as
+  one FBX with its LODs inside, named so Unity builds a LODGroup per prop on import.
+  `scripts/unity_export.py --lod` does the same for any one model.
 - **SkinTokens in Setup & Status.** The automatic rigger installs from its own card, or
   with `scripts/bootstrap_skintokens.py`: a pinned Rust build plus the 1.1 GB checkpoint,
   named, sized and asked for before anything downloads.

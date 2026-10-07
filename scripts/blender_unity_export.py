@@ -2,13 +2,16 @@
 """Export a (rigged) GLB as a Unity-ready FBX, with each material's textures as PNGs.
 
     blender --background --python-exit-code 1 --python scripts/blender_unity_export.py -- \
-        IN.glb OUT_DIR NAME HEIGHT
+        IN.glb OUT_DIR NAME HEIGHT [--lod LOD1.glb LOD2.glb ...]
 
 Scales the model uniformly to HEIGHT metres (0 keeps its size) and applies it, so Unity
 imports it at 1:1 with no stray transform. Bone display shapes the glTF importer adds
 are dropped, so they neither count towards the height nor ship as meshes. Writes `OUT_DIR/NAME.fbx` with Unity's axes (Y up, -Z forward, no leaf
 bones, deform bones only) and `OUT_DIR/textures/<material>_<role>.png`. The metallic-
 roughness texture is written raw (`_metalRough.png`); `scripts/unity_export.py` repacks it.
+With `--lod`, IN is LOD0 and each further GLB the next level of detail: all go into the
+one FBX as meshes named `NAME_LOD0`, `NAME_LOD1`..., which Unity turns into a LODGroup
+on import with no setup. Each LOD keeps its own material and textures.
 Prints `I2L_UNITY_EXPORT {json}` describing materials, rig and animations.
 """
 
@@ -83,6 +86,25 @@ def mesh_height(meshes) -> float:
     return hi[2] - lo[2]
 
 
+def parse_args(argv: list[str]) -> tuple[list[str], str, str, str]:
+    """IN OUT_DIR NAME HEIGHT [--lod MORE.glb ...] -> ([IN, MORE...], OUT_DIR, NAME, HEIGHT)."""
+    if "--lod" in argv:
+        at = argv.index("--lod")
+        head, lods = argv[:at], argv[at + 1:]
+    else:
+        head, lods = argv, []
+    if len(head) != 4:
+        raise SystemExit("usage: IN.glb OUT_DIR NAME HEIGHT [--lod MORE.glb ...]")
+    source, out_dir, name, height = head
+    return [source, *lods], out_dir, name, height
+
+
+def lod_object_name(name: str, level: int, index: int = 0) -> str:
+    """Unity makes a LODGroup from meshes whose names END in _LOD<n>, so a second mesh
+    in one level gets its counter before the suffix, never after."""
+    return f"{name}_LOD{level}" if index == 0 else f"{name}_{index}_LOD{level}"
+
+
 def linked_image(socket):
     """The image feeding a socket, through a normal-map or separate-colour node if any."""
     if socket is None or not socket.is_linked:
@@ -105,13 +127,21 @@ def main() -> None:
 
     from image_to_3dlab.unity_export import safe_name, scale_for_height, texture_file
 
-    source, out_dir, name, height = sys.argv[sys.argv.index("--") + 1:][:4]
+    sources, out_dir, name, height = parse_args(sys.argv[sys.argv.index("--") + 1:])
     out = Path(out_dir)
     textures = out / "textures"
     textures.mkdir(parents=True, exist_ok=True)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=source)
+    for level, source in enumerate(sources):
+        before_objects, before_mats = set(bpy.data.objects), set(bpy.data.materials)
+        bpy.ops.import_scene.gltf(filepath=source)
+        if len(sources) > 1:
+            new_meshes = [o for o in bpy.data.objects if o not in before_objects and o.type == "MESH"]
+            for index, obj in enumerate(new_meshes):
+                obj.name = lod_object_name(safe_name(name), level, index)
+            for mat in set(bpy.data.materials) - before_mats:
+                mat.name = f"{safe_name(name)}_LOD{level}_{mat.name}"
     scene = bpy.context.scene
     scene.unit_settings.system = "METRIC"
     scene.unit_settings.scale_length = 1.0
@@ -199,6 +229,7 @@ def main() -> None:
         "bones": len(armatures[0].data.bones) if armatures else 0,
         "unweighted_vertices": unweighted,
         "has_animations": has_animations,
+        "lods": len(sources),
         "height": mesh_height(meshes),
         "scale": scale,
     }), flush=True)
