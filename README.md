@@ -13,6 +13,9 @@ game or whatever else you're up to. Nothing is uploaded to a cloud service.
 
 **What you get**
 
+- **Image → Unity in one go.** One picture becomes a rigged, textured model that imports
+  into Unity ready to animate: Humanoid rigs take Mixamo animations, creatures get Generic
+  rigs. [More](docs/unity.md)
 - **Low poly, high quality.** Pixel Match puts your picture's real pixels back on the
   model, so text, logos and faces stay sharp even after it is cut to ~5k faces.
   [More](#finishing-an-asset)
