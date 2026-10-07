@@ -15,6 +15,7 @@ Prints `I2L_UNITY_EXPORT {json}` describing materials, rig and animations.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -53,10 +54,33 @@ def fbx_kwargs(path: str, has_animations: bool) -> dict:
     }
 
 
+# Degrees about Blender's Z applied before export. Generated models face glTF's front
+# (Blender -Y); with the axis settings below that arrived in Unity facing -Z, checked by
+# importing into Unity 6 (2026-10-07). Unity characters face +Z, hence the half turn.
+UNITY_FACING_TURN = 180.0
+
+
+def mesh_bounds(meshes) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """World-space (min, max) corners of the meshes' vertices."""
+    points = [o.matrix_world @ v.co for o in meshes for v in o.data.vertices]
+    if not points:
+        return (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+    lo = tuple(min(p[i] for p in points) for i in range(3))
+    hi = tuple(max(p[i] for p in points) for i in range(3))
+    return lo, hi  # type: ignore[return-value]
+
+
+def ground_offset(lo, hi) -> tuple[float, float, float]:
+    """Translation putting the model's feet on the origin: centred in X and Y, lowest
+    point at Z = 0. Unity characters pivot at their feet; a centred pivot sinks them
+    halfway into the floor."""
+    return (-(lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2])
+
+
 def mesh_height(meshes) -> float:
     """World-space height (Blender Z) of the meshes' vertices."""
-    zs = [(o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices]
-    return (max(zs) - min(zs)) if zs else 0.0
+    lo, hi = mesh_bounds(meshes)
+    return hi[2] - lo[2]
 
 
 def linked_image(socket):
@@ -106,9 +130,20 @@ def main() -> None:
     roots = [o for o in scene.objects if o.parent is None]
     for obj in roots:
         obj.scale = [s * scale for s in obj.scale]
+    bpy.context.view_layer.update()
+
+    # Pivot at the feet, centred, and turned to face Unity's +Z. Then bake it all in so
+    # the FBX carries no root transform for Unity to inherit.
+    from mathutils import Matrix, Vector
+
+    lo, hi = mesh_bounds(meshes)
+    offset = Vector(ground_offset(lo, hi))
+    turn = Matrix.Rotation(math.radians(UNITY_FACING_TURN), 4, "Z")
+    for obj in roots:
+        obj.matrix_world = turn @ Matrix.Translation(offset) @ obj.matrix_world
     bpy.ops.object.select_all(action="SELECT")
     bpy.context.view_layer.objects.active = roots[0] if roots else None
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
     materials = []
     for mat in bpy.data.materials:

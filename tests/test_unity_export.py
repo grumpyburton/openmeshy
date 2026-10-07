@@ -113,3 +113,11 @@ def test_fbx_settings_suit_unity():
     assert kw["add_leaf_bones"] is False and kw["use_armature_deform_only"] is True
     assert kw["apply_scale_options"] == "FBX_SCALE_UNITS"
     assert kw["bake_anim"] is False and bue.fbx_kwargs("x", True)["bake_anim"] is True
+
+
+def test_ground_offset_puts_feet_on_origin():
+    assert bue.ground_offset((-1.0, 2.0, -0.5), (1.0, 4.0, 1.3)) == (0.0, -3.0, 0.5)
+
+
+def test_facing_turn_is_a_half_turn():
+    assert bue.UNITY_FACING_TURN == 180.0

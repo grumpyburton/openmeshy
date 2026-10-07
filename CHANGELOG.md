@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scale (humanoids 1.8 m), textures packed the way URP Lit wants them, and a manifest.
   `unity/OpenMeshy/Editor/OpenMeshyImporter.cs` reads it on import: Humanoid or Generic
   rig, axis conversion, normal maps flagged and URP materials built. `--unity-project`
-  copies both into a project.
+  copies both into a project. Models arrive with their pivot at the feet and facing
+  Unity's +Z, both checked by importing into Unity 6.
 - **Keep the big stuff on another drive.** `scripts/relocate_data.py /Volumes/X/i2l`
   moves `vendor/`, `output/`, `.venv/` and the Hunyuan weights there as symlinks and
   writes the path to `.i2l-data`. The lab and `pipeline.py` then point every model cache
