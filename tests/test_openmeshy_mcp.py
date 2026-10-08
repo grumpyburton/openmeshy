@@ -54,7 +54,8 @@ class FakeLab:
         return {"job_id": "a" * 32}
 
     def post_form(self, path, fields, files):
-        self.posts.append((path, json.loads(fields["settings"]), {k: v.name for k, v in files.items()}))
+        settings = json.loads(fields["settings"]) if "settings" in fields else None
+        self.posts.append((path, settings, {k: v.name for k, v in files.items()}))
         return {"job_id": "b" * 32}
 
     def wait(self, kind, job_id, seconds):
@@ -69,8 +70,18 @@ class FakeLab:
         return dest
 
     def get(self, path):
+        if path == "/api/backends":  # the Generate tab's routes, not the catalogue
+            return {"backends": BACKENDS}
         return {"backends": [{"id": "pixal3d", "state": "ready", "kind": "3d"},
                              {"id": "hunyuan-cuda", "state": "unsupported"}]}
+
+
+BACKENDS = [
+    {"id": "pixal3d", "runs_here": True, "default_settings": {"seed": 42}},
+    {"id": "trellis", "runs_here": True, "default_settings": {"seed": 0, "resolution": "1024"}},
+    {"id": "sf3d", "runs_here": True, "default_settings": {"texture_resolution": 1024}},
+    {"id": "hunyuan-cuda", "runs_here": False, "default_settings": {"seed": 42}},
+]
 
 
 @pytest.fixture
@@ -183,3 +194,60 @@ def test_install_to_unity(fake, tmp_path):
     result = server.install_to_unity(str(folder), str(project))
     assert result["installed"].endswith("Assets/OpenMeshy/hero")
     assert "error" in server.install_to_unity(str(tmp_path), str(project))
+
+
+def test_generate_3d_defaults_to_pixal3d(fake, tmp_path):
+    image = tmp_path / "chest.png"
+    image.write_bytes(b"x")
+    server.generate_3d(str(image), seed=7)
+    assert fake.posts[0] == ("/api/generate", {"backend": "pixal3d", "seed": 7},
+                             {"image": "chest.png"})
+
+
+def test_generate_3d_can_pick_another_backend(fake, tmp_path):
+    image = tmp_path / "chest.png"
+    image.write_bytes(b"x")
+    server.generate_3d(str(image), backend="trellis", seed=3)
+    assert fake.posts[0][1] == {"backend": "trellis", "seed": 3}
+    # SF3D takes no seed, and the lab rejects settings a route does not know.
+    server.generate_3d(str(image), backend="sf3d")
+    assert fake.posts[1][1] == {"backend": "sf3d"}
+
+
+def test_generate_3d_refuses_a_backend_this_machine_cannot_run(fake, tmp_path):
+    image = tmp_path / "chest.png"
+    image.write_bytes(b"x")
+    for name in ("hunyuan-cuda", "nonsense"):
+        error = server.generate_3d(str(image), backend=name)["error"]
+        assert "does not run on this machine" in error and "pixal3d" in error
+        assert "hunyuan-cuda," not in error  # only routes that run here are offered
+    assert fake.posts == []
+
+
+def test_rebind_rig_sends_the_three_rig_review_files(fake, tmp_path):
+    model, scene, sidecar = (tmp_path / "hero.glb", tmp_path / "hero.blend",
+                             tmp_path / "hero.rig.json")
+    for f in (model, scene, sidecar):
+        f.write_bytes(b"x")
+    result = server.rebind_rig(str(model), str(scene), str(sidecar))
+    assert fake.posts[0] == ("/api/rig/rebind", None, {
+        "asset": "hero.glb", "scene": "hero.blend", "sidecar": "hero.rig.json"})
+    assert result["kind"] == "rig" and result["status"] == "done"
+
+
+def test_rebind_rig_wants_a_rig_sidecar(fake, tmp_path):
+    model, scene, other = tmp_path / "h.glb", tmp_path / "h.blend", tmp_path / "h.json"
+    for f in (model, scene, other):
+        f.write_bytes(b"x")
+    assert "rig.json" in server.rebind_rig(str(model), str(scene), str(other))["error"]
+    assert fake.posts == []
+
+
+def test_rig_jobs_have_a_status_route():
+    assert client.KINDS["rig"] == "rig/rebind"
+    assert "rig" in (server.job_status.__doc__ or "")
+
+
+def test_image_tool_does_not_promise_a_mac():
+    doc = server.generate_image.__doc__ or ""
+    assert "on this Mac" not in doc and "~12 min." not in doc

@@ -34,7 +34,7 @@ from openmeshy_mcp.client import (
 
 INSTRUCTIONS = """\
 Local image -> 3D -> Unity pipeline (Pixal3D, Blender, SkinTokens). All on this Mac.
-No picture yet? generate_image(prompt) makes one with Qwen-Image (~12 min; NON-COMMERCIAL
+No picture yet? generate_image(prompt) makes one with Qwen-Image (seconds to minutes; NON-COMMERCIAL
 licence, say so), then pass its local_path on. Ask for a full body on a plain white
 background, in a T- or A-pose for characters.
 Typical flow: image_to_unity(image) -> job_status('unity', id, wait_seconds=600) until done
@@ -125,8 +125,8 @@ def image_to_unity(image: str, rig_class: str = "humanoid", faces: int = 30000,
 def generate_image(prompt: str, width: int = 768, height: int = 768, seed: int = 42,
                    steps: int = 10, negative_prompt: str = "",
                    wait_seconds: float = 0) -> dict[str, Any]:
-    """Text -> PNG with Qwen-Image 2.1 (stable-diffusion.cpp, on this Mac). ~12 min.
-    Qwen's licence says non-commercial use; tell the user. Sizes are multiples of 32
+    """Text -> PNG with Qwen-Image 2.1 (stable-diffusion.cpp, on this machine's GPU).
+    Seconds on an NVIDIA or AMD card, ~4-12 min on a Mac. Qwen's licence says non-commercial use; tell the user. Sizes are multiples of 32
     (256-1536). When done, job_status('image', id) gives the PNG's `local_path`, ready
     for generate_3d or image_to_unity."""
     def go() -> dict[str, Any]:
@@ -146,14 +146,37 @@ def _with_image_path(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def backend_settings(backends: list[dict[str, Any]], backend: str,
+                     seed: int) -> dict[str, Any]:
+    """The /api/generate settings for `backend`, or ValueError naming the ones that run here.
+
+    The seed is only sent to routes that take one (SF3D has none, and the lab rejects
+    settings a route does not know).
+    """
+    runnable = [b["id"] for b in backends if b.get("runs_here")]
+    spec = next((b for b in backends if b.get("id") == backend), None)
+    if spec is None or not spec.get("runs_here"):
+        raise ValueError(f"backend {backend!r} does not run on this machine; "
+                         f"choose one of: {', '.join(runnable) or 'none installed'}")
+    settings: dict[str, Any] = {"backend": backend}
+    if "seed" in (spec.get("default_settings") or {}):
+        settings["seed"] = seed
+    return settings
+
+
 @server.tool()
-def generate_3d(image: str, seed: int = 42, wait_seconds: float = 0) -> dict[str, Any]:
-    """Image -> textured high-poly GLB with Pixal3D (MIT). ~12-15 min. For characters,
-    single props or a whole prop sheet. When done, job_status reports result_url and the
-    downloaded local path."""
+def generate_3d(image: str, seed: int = 42, backend: str = "pixal3d",
+                wait_seconds: float = 0) -> dict[str, Any]:
+    """Image -> textured high-poly GLB. ~1-15 min depending on backend and machine.
+    backend: pixal3d (default, MIT, best results), trellis, hunyuan-mlx, hunyuan-mlx-xiong,
+    hunyuan-cuda or sf3d; lab_status says which are installed. Licences differ (Hunyuan's
+    excludes the EU, UK and South Korea); the result's provenance sidecar records it.
+    For characters, single props or a whole prop sheet. When done, job_status reports
+    result_url and the downloaded local path."""
     def go() -> dict[str, Any]:
         path = existing_file(image, IMAGE_TYPES, "image")
-        settings = {"backend": "pixal3d", "seed": seed}
+        settings = backend_settings(lab.get("/api/backends").get("backends", []),
+                                    backend, seed)
         response = lab.post_form("/api/generate", {"settings": json.dumps(settings)},
                                  {"image": path})
         return _started("generate", response, wait_seconds)
@@ -183,6 +206,26 @@ def autorig(model: str, rig_class: str = "humanoid", seed: int = 0,
         "/api/tools/autorig", {"model": _lab_file(model, {".glb"}, "model"),
                                "class": rig_class, "seed": seed}),
         wait_seconds))
+
+
+@server.tool()
+def rebind_rig(model: str, scene: str, sidecar: str,
+               wait_seconds: float = 300) -> dict[str, Any]:
+    """Apply joint corrections to a rigged model and re-skin it in Blender.
+
+    Takes the three files the lab's Rig Review saves: the rigged `model` (.glb), its
+    prepared Blender `scene` (.blend) and a corrected `sidecar` (.rig.json) whose joint
+    positions you may edit. The sidecar is fingerprinted to the model, so it must come from
+    that same model. When done, job_status('rig', id) gives the re-skinned GLB."""
+    def go() -> dict[str, Any]:
+        if not sidecar.lower().endswith(".rig.json"):
+            raise ValueError("sidecar must be a .rig.json file")
+        files = {"asset": existing_file(model, {".glb"}, "model"),
+                 "scene": existing_file(scene, {".blend"}, "scene"),
+                 "sidecar": existing_file(sidecar, {".json"}, "sidecar")}
+        response = lab.post_form("/api/rig/rebind", {}, files)
+        return _started("rig", response, wait_seconds)
+    return _call(go)
 
 
 @server.tool()
@@ -244,7 +287,7 @@ def install_to_unity(unity_folder: str, unity_project: str = ".") -> dict[str, A
 
 @server.tool()
 def job_status(kind: str, job_id: str, wait_seconds: float = 0) -> dict[str, Any]:
-    """State of a job: kind is image, generate, finish, props, unity or tool. With wait_seconds
+    """State of a job: kind is image, generate, finish, props, unity, tool or rig. With wait_seconds
     (max 900) it blocks until the job ends. Finished generate/finish jobs have their GLB
     saved locally; its path is in `local_path`."""
     if kind not in KINDS:
@@ -267,7 +310,7 @@ def job_status(kind: str, job_id: str, wait_seconds: float = 0) -> dict[str, Any
 
 @server.tool()
 def cancel_job(kind: str, job_id: str) -> dict[str, Any]:
-    """Stop a running job (kind: image, generate, finish, props, unity, tool)."""
+    """Stop a running job (kind: image, generate, finish, props, unity, tool, rig)."""
     if kind not in KINDS:
         return {"error": f"kind must be one of {', '.join(KINDS)}"}
     return _call(lambda: lab.cancel(kind, job_id))

@@ -31,11 +31,12 @@ The server starts the lab (`viewer/serve.py`) itself if it is not running.
 
 | Tool | What it does | Time |
 |---|---|---|
-| `generate_image` | text → PNG (Qwen-Image, non-commercial licence) | ~12 min |
+| `generate_image` | text → PNG (Qwen-Image, non-commercial licence) | seconds on NVIDIA/AMD, 4–12 min on a Mac |
 | `image_to_unity` | image → rigged, textured Unity folder + zip | 13–16 min |
-| `generate_3d` | image → textured GLB (Pixal3D) | 12–15 min |
+| `generate_3d` | image → textured GLB; Pixal3D by default, or any other backend installed here (`backend=`) | 1–15 min |
 | `finish_model` | retopology to a face budget, detail bake, Pixel Match | ~30 s |
 | `autorig` | skeleton + skin weights (SkinTokens, else template) | ~1 min |
+| `rebind_rig` | apply joint corrections from Rig Review (model + .blend + .rig.json) and re-skin | ~1 min |
 | `export_unity` | GLB (+ LODs) → FBX, URP textures, manifest; optional copy into a project | seconds |
 | `split_props` | prop-sheet GLB → separate named props with LODs | minutes |
 | `export_props_unity` | every finished prop → one FBX each, LODGroup-ready | ~1 min |

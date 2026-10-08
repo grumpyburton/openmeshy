@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Image sidecars said "Metal" everywhere.** The runtime in a generated picture's
   provenance record now follows the OS: Metal on a Mac, CUDA on Windows, Vulkan on Linux.
+- **`generate_image` told agents it runs "on this Mac" in ~12 min.** On an NVIDIA or AMD
+  card it takes seconds, so agents waited far too long. The tool text now says so.
 - **Three tests only passed on a Mac without a system Blender.** They now pin the host
   and ignore Blender installs already on the machine.
 - **The GPU-fallback warning named only NVIDIA.** It now tells AMD users to check
@@ -25,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses. Tried on a Radeon RX 9060 XT: a 768px picture in 25 s, a chest in 8.5 min. The
   Setup page's AMD tab is live. Pixal3D's Vulkan build misbehaved on that card (zero
   voxels, then NaNs), which is why ROCm comes first.
+- **MCP: pick the 3D backend, and rebind rigs.** `generate_3d` takes `backend=` for any
+  route installed on this machine (it refuses one that is not, naming those that are).
+  New `rebind_rig` tool applies Rig Review joint corrections, and `job_status` follows
+  rig jobs.
 - **`generate_image` MCP tool.** Claude can now make the source picture too: text to PNG
   with Qwen-Image on this Mac, then straight on to `image_to_unity`. The PNG keeps its
   licence record, which carries Qwen's non-commercial terms.
