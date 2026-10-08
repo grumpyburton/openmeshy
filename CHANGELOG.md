@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Image sidecars said "Metal" everywhere.** The runtime in a generated picture's
   provenance record now follows the OS: Metal on a Mac, CUDA on Windows, Vulkan on Linux.
+- **Three tests only passed on a Mac without a system Blender.** They now pin the host
+  and ignore Blender installs already on the machine.
 - **The GPU-fallback warning named only NVIDIA.** It now tells AMD users to check
   `vulkaninfo --summary` too.
 - **Unity exports of models with WebP or JPEG textures.** Blender kept a packed image's

@@ -264,14 +264,16 @@ def test_trellis_input_advisor_rejects_malformed_output(monkeypatch, tmp_path):
 # --- setup runner (bootstrap via the web UI) ---
 def test_setup_available_reports_missing_uv(monkeypatch):
     monkeypatch.setattr(api.shutil, "which", lambda name: None if name == "uv" else "/usr/bin/uv")
-    ok, reason = api.setup_available()
+    # Pinned to a Mac: anywhere else the Mac-port runner says so before it looks for uv.
+    ok, reason = api.setup_available(host=api.APPLE)
     assert ok is False and "uv" in reason
 
 
 def test_setup_available_reports_missing_bootstrap(monkeypatch, tmp_path):
     monkeypatch.setattr(api.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None)
     monkeypatch.setattr(api, "REPO", tmp_path)
-    ok, reason = api.setup_available()
+    # Pinned to a Mac: anywhere else the Mac-port runner says so before it looks for uv.
+    ok, reason = api.setup_available(host=api.APPLE)
     assert ok is False and "bootstrap" in reason
 
 

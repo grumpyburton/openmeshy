@@ -36,7 +36,12 @@ def test_the_path_comes_before_install_folders(tmp_path):
                            family="linux", home=tmp_path) == Path("/somewhere/blender")
 
 
-def test_a_blender_org_tarball_in_the_home_folder_is_found_on_linux(tmp_path):
+def test_a_blender_org_tarball_in_the_home_folder_is_found_on_linux(tmp_path, monkeypatch):
+    """Only the home folder is in play: a real /usr/bin/blender or /opt tarball on the
+    machine running the tests would otherwise be found first."""
+    real = bl.candidates
+    monkeypatch.setattr(bl, "candidates", lambda family, home=None: [
+        p for p in real(family, home) if tmp_path in p.parents])
     unpacked = _exe(tmp_path / "blender-5.2.0-linux-x64" / "blender")
     assert bl.find_blender(env={}, which=lambda _: None, family="linux",
                            home=tmp_path) == unpacked
