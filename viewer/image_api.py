@@ -309,6 +309,8 @@ class ImageJob:
             "elapsed_seconds": round(time.monotonic() - self.started, 1),
             "result_url": f"/api/image/{self.id}/result.png"
             if self.status == "done" else None,
+            # The saved PNG (its .provenance.json sits beside it), for local callers.
+            "path": str(self.output_path) if self.status == "done" else None,
         }
 
 
