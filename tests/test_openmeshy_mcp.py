@@ -58,6 +58,9 @@ class FakeLab:
         return {"job_id": "b" * 32}
 
     def wait(self, kind, job_id, seconds):
+        if kind == "image":  # the image route answers with job.describe(), no last_event
+            return {"status": "done", "result_url": "/api/image/x/result.png",
+                    "path": "/out/images/goblin.png", "error": None}
         return {"status": "done", "last_event": {"message": "ok", "result_url": "/r.glb"}}
 
     def download(self, url, dest):
@@ -105,6 +108,28 @@ def test_job_status_downloads_finished_glb(fake, tmp_path):
     result = server.job_status("generate", "c" * 32)
     assert result["local_path"].endswith("result.glb")
     assert server.job_status("bogus", "x")["error"]
+
+
+def test_generate_image_posts_prompt_and_settings(fake):
+    result = server.generate_image("a goblin in a T-pose", width=512, height=768, seed=7)
+    path, body = fake.posts[0]
+    assert path == "/api/image" and body["prompt"] == "a goblin in a T-pose"
+    assert body["settings"] == {"width": 512, "height": 768, "seed": 7, "steps": 10,
+                                "negative_prompt": ""}
+    assert result["kind"] == "image" and "job_status('image'" in result["next"]
+    assert "error" in server.generate_image("   ")
+
+
+def test_finished_image_reports_its_saved_png(fake):
+    result = server.generate_image("goblin", wait_seconds=60)
+    assert result["status"] == "done" and result["local_path"] == "/out/images/goblin.png"
+    assert server.job_status("image", "d" * 32)["local_path"] == "/out/images/goblin.png"
+
+
+def test_summarise_reads_top_level_fields_without_an_event():
+    out = client.summarise({"status": "error", "error": "sd-cli exited with code 1",
+                            "result_url": None})
+    assert out["error"] == "sd-cli exited with code 1" and "result_url" not in out
 
 
 def test_bad_input_is_an_error_not_a_crash(fake, tmp_path):

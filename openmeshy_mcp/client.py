@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_URL = os.environ.get("OPENMESHY_LAB_URL", "http://127.0.0.1:8777")
 # Job kinds and where their API lives. Each has /status and /cancel under /api/<path>/<id>.
 KINDS = {"generate": "generate", "finish": "finish", "props": "props",
-         "unity": "unity", "tool": "tools"}
+         "unity": "unity", "tool": "tools", "image": "image"}
 TERMINAL = {"done", "error", "cancelled"}
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -89,8 +89,10 @@ def summarise(status: dict[str, Any]) -> dict[str, Any]:
                 "preview_url", "log_tail", "directory"):
         if event.get(key) is not None:
             out[key] = event[key]
-    if status.get("directory") and "directory" not in out:
-        out["directory"] = status["directory"]
+    # The image route answers with the job's own fields, not an event.
+    for key in ("directory", "result_url", "error"):
+        if status.get(key) and key not in out:
+            out[key] = status[key]
     if out["status"] == "error" and "log_tail" not in out and status.get("log_tail"):
         out["log_tail"] = status["log_tail"][-2000:]
     return out

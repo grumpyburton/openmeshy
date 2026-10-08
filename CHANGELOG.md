@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Every exported texture is now checked and re-encoded as real PNG.
 
 ### Added
+- **`generate_image` MCP tool.** Claude can now make the source picture too: text to PNG
+  with Qwen-Image on this Mac, then straight on to `image_to_unity`. The PNG keeps its
+  licence record, which carries Qwen's non-commercial terms.
 - **Automatic rigging.** `scripts/autorig.py` gives a finished GLB a skeleton and skin
   weights with no hand fitting: SkinTokens (VAST-AI's TokenRig, MIT, on Metal) first,
   then a template skeleton fitted to the mesh's proportions if the learned rig fails the

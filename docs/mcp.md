@@ -2,7 +2,8 @@
 
 `openmeshy_mcp/` is an [MCP](https://modelcontextprotocol.io) server. With it, Claude Code
 (or any MCP client) can run the whole pipeline: "turn `hero.png` into a rigged Unity
-character and put it in `~/MyGame`".
+character and put it in `~/MyGame`", or start from words alone: "make me a goblin for
+Unity".
 
 ## Set up
 
@@ -30,6 +31,7 @@ The server starts the lab (`viewer/serve.py`) itself if it is not running.
 
 | Tool | What it does | Time |
 |---|---|---|
+| `generate_image` | text → PNG (Qwen-Image, non-commercial licence) | ~12 min |
 | `image_to_unity` | image → rigged, textured Unity folder + zip | 13–16 min |
 | `generate_3d` | image → textured GLB (Pixal3D) | 12–15 min |
 | `finish_model` | retopology to a face budget, detail bake, Pixel Match | ~30 s |

@@ -34,6 +34,9 @@ from openmeshy_mcp.client import (
 
 INSTRUCTIONS = """\
 Local image -> 3D -> Unity pipeline (Pixal3D, Blender, SkinTokens). All on this Mac.
+No picture yet? generate_image(prompt) makes one with Qwen-Image (~12 min; NON-COMMERCIAL
+licence, say so), then pass its local_path on. Ask for a full body on a plain white
+background, in a T- or A-pose for characters.
 Typical flow: image_to_unity(image) -> job_status('unity', id, wait_seconds=600) until done
 -> render_preview(path) to look at it. One heavy job runs at a time; a 409 error means wait.
 Generation takes ~12-15 min; finish ~30 s; autorig ~1 min; Unity export seconds.
@@ -52,7 +55,10 @@ def _started(kind: str, response: dict[str, Any], wait_seconds: float) -> dict[s
     job_id = response["job_id"]
     result: dict[str, Any] = {"kind": kind, "job_id": job_id}
     if wait_seconds > 0:
-        result.update(summarise(lab.wait(kind, job_id, min(wait_seconds, MAX_WAIT))))
+        status = lab.wait(kind, job_id, min(wait_seconds, MAX_WAIT))
+        result.update(summarise(status))
+        if status.get("path"):
+            result["path"] = status["path"]
     else:
         result["next"] = f"job_status('{kind}', '{job_id}', wait_seconds=600)"
     return result
@@ -113,6 +119,31 @@ def image_to_unity(image: str, rig_class: str = "humanoid", faces: int = 30000,
                                  {"image": path})
         return _started("unity", response, wait_seconds)
     return _call(go)
+
+
+@server.tool()
+def generate_image(prompt: str, width: int = 768, height: int = 768, seed: int = 42,
+                   steps: int = 10, negative_prompt: str = "",
+                   wait_seconds: float = 0) -> dict[str, Any]:
+    """Text -> PNG with Qwen-Image 2.1 (stable-diffusion.cpp, on this Mac). ~12 min.
+    Qwen's licence says non-commercial use; tell the user. Sizes are multiples of 32
+    (256-1536). When done, job_status('image', id) gives the PNG's `local_path`, ready
+    for generate_3d or image_to_unity."""
+    def go() -> dict[str, Any]:
+        if not prompt.strip():
+            raise ValueError("a prompt is required")
+        settings = {"width": width, "height": height, "seed": seed, "steps": steps,
+                    "negative_prompt": negative_prompt}
+        response = lab.post_json("/api/image", {"prompt": prompt, "settings": settings})
+        return _with_image_path(_started("image", response, wait_seconds))
+    return _call(go)
+
+
+def _with_image_path(result: dict[str, Any]) -> dict[str, Any]:
+    """A finished picture is already on disk with its sidecar; point at it, no copy."""
+    if result.get("status") == "done" and result.get("path"):
+        result["local_path"] = result.pop("path")
+    return result
 
 
 @server.tool()
@@ -213,14 +244,17 @@ def install_to_unity(unity_folder: str, unity_project: str = ".") -> dict[str, A
 
 @server.tool()
 def job_status(kind: str, job_id: str, wait_seconds: float = 0) -> dict[str, Any]:
-    """State of a job: kind is generate, finish, props, unity or tool. With wait_seconds
+    """State of a job: kind is image, generate, finish, props, unity or tool. With wait_seconds
     (max 900) it blocks until the job ends. Finished generate/finish jobs have their GLB
     saved locally; its path is in `local_path`."""
     if kind not in KINDS:
         return {"error": f"kind must be one of {', '.join(KINDS)}"}
 
     def go() -> dict[str, Any]:
-        result = summarise(lab.wait(kind, job_id, min(wait_seconds, MAX_WAIT)))
+        status = lab.wait(kind, job_id, min(wait_seconds, MAX_WAIT))
+        if kind == "image":
+            return _with_image_path({**summarise(status), "path": status.get("path")})
+        result = summarise(status)
         url = result.get("result_url")
         if result.get("status") == "done" and url:
             dest = REPO / "output" / "mcp" / f"{kind}_{job_id[:8]}" / "result.glb"
@@ -233,7 +267,7 @@ def job_status(kind: str, job_id: str, wait_seconds: float = 0) -> dict[str, Any
 
 @server.tool()
 def cancel_job(kind: str, job_id: str) -> dict[str, Any]:
-    """Stop a running job (kind: generate, finish, props, unity, tool)."""
+    """Stop a running job (kind: image, generate, finish, props, unity, tool)."""
     if kind not in KINDS:
         return {"error": f"kind must be one of {', '.join(KINDS)}"}
     return _call(lambda: lab.cancel(kind, job_id))

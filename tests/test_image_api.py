@@ -187,9 +187,10 @@ def test_missing_weights_names_what_is_missing():
 def test_job_describe_hides_the_result_until_it_exists(tmp_path):
     manager = api.ImageJobManager(output_root=tmp_path)
     job = manager.create("one", api.clean_settings({}))
-    assert job.describe()["result_url"] is None
+    assert job.describe()["result_url"] is None and job.describe()["path"] is None
     job.status = "done"
     assert job.describe()["result_url"].endswith("/result.png")
+    assert job.describe()["path"] == str(job.output_path)
 
 
 def test_sidecar_names_each_weight_file_readably():

@@ -319,7 +319,7 @@ to this Unity project".
 Claude Code sessions so they pick it up.
 
 Claude then has tools for every step:
-- `image_to_unity`, `generate_3d`, `finish_model`, `autorig`, `export_unity`
+- `generate_image`, `image_to_unity`, `generate_3d`, `finish_model`, `autorig`, `export_unity`
 - `split_props`, `export_props_unity`, `install_to_unity`
 - `job_status`, `cancel_job`, `list_outputs`, `lab_status`
 - `render_preview`, which returns a picture Claude can look at
