@@ -34,6 +34,7 @@ sys.path.insert(0, str(REPO / "viewer"))
 sys.path.insert(0, str(REPO))
 
 from image_to_3dlab import processes  # noqa: E402
+from image_to_3dlab.host import AMD
 from backend_catalog import (  # noqa: E402
     BY_ID,
     HF_HUB_DIR,
@@ -103,6 +104,8 @@ def building_label(backend_id: str, host: str | None = None) -> str:
     """What a setup with no bytes to measure is doing, for the progress line."""
     if (backend_id, host or _this_host()) in HOST_COMMANDS or backend_id == "hunyuan-cuda":
         return "building the CUDA version"
+    if (host or _this_host()) == AMD:
+        return "fetching the Vulkan build"
     return "building the Metal port"
 
 

@@ -4,7 +4,7 @@
 Two halves, the same way the viewer tracks every other backend. The **build** is a
 prebuilt `stable-diffusion.cpp` release binary. Nothing is compiled: upstream publishes a
 Metal build for Apple Silicon, a CUDA build for Windows and a Vulkan build for Linux, which
-runs on NVIDIA cards. The **weights** are three files totalling about 13.4 GB.
+runs on NVIDIA and AMD cards. The **weights** are three files totalling about 13.4 GB.
 
 `AGENTS.md`: a download path must name the backend, name the route, state the size, and
 require an affirmative answer. This prints all of that and stops, unless `--yes` is given
@@ -109,7 +109,13 @@ BUILDS = {
     # NVIDIA card; the NVIDIA driver ships the Vulkan support it needs.
     "linux-nvidia": Build("Vulkan on Linux (NVIDIA)", "~40 MB",
                           (("linux", "x86_64", "vulkan"),)),
+    # The same archive: Vulkan runs on Mesa's RADV or AMD's own driver (Radeon RX 9060 XT,
+    # 2026-10-08: a 768px picture in 25 s).
+    "linux-amd": Build("Vulkan on Linux (AMD)", "~40 MB",
+                       (("linux", "x86_64", "vulkan"),)),
 }
+# Builds that load their GPU backend at run time, so a probe can catch a CPU fallback.
+PROBED_TARGETS = frozenset({"linux-nvidia", "windows-nvidia", "linux-amd"})
 
 
 # Looked up through the module so a test can pretend to be another machine.
@@ -139,8 +145,8 @@ def install_binary(destination: Path = VENDOR) -> Path:
     if build is None:
         raise SystemExit(
             "There is no prebuilt stable-diffusion.cpp for this machine. Supported: an "
-            "Apple Silicon Mac, or Linux/Windows with an NVIDIA card. Otherwise build it "
-            f"from source and put sd-cli in {destination}."
+            "Apple Silicon Mac, Linux/Windows with an NVIDIA card, or Linux with an AMD "
+            f"card. Otherwise build it from source and put sd-cli in {destination}."
         )
     print("Finding the latest stable-diffusion.cpp release...")
     try:
@@ -245,13 +251,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\nsd-cli is already installed at {BINARY}, leaving it alone.")
         else:
             install_binary()
-        # The NVIDIA builds load their GPU backend at run time and fall back to the CPU
-        # without a word if it cannot reach the driver. Catch that now, not 13 GB later.
-        if target() in ("linux-nvidia", "windows-nvidia"):
+        # The Linux and Windows builds load their GPU backend at run time and fall back
+        # to the CPU without a word if it cannot reach the driver. Catch that now, not
+        # 13 GB later.
+        if target() in PROBED_TARGETS:
             if not gpu_found(probe_gpu()):
                 print("\n" + NO_GPU_HELP + "\nThe weights were not downloaded.")
                 return 1
-            print("sd-cli found the NVIDIA GPU.")
+            print("sd-cli found the GPU.")
     if weights:
         install_weights()
     print("\nDone. Open the viewer's Generate Image tab.")

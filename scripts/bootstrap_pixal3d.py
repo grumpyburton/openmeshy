@@ -14,6 +14,12 @@ machine:
 - **Linux, driver too old for the prebuilt, CUDA toolkit present:** compiled locally for
   this card instead. `--compile` asks for that even when the prebuilt would run. With
   neither, it says which driver to install and stops.
+- **Linux with an AMD card:** upstream's prebuilt ROCm build (175 MB) when ROCm is
+  installed, else the Vulkan build (26 MB). No compiler, no driver version to check.
+  Vulkan would be the lighter choice, and upstream measured it faster on Strix Halo,
+  but on a Radeon RX 9060 XT (RDNA4, Mesa 26.2 RADV, 2026-10-08) it produced zero
+  voxels with cooperative matrices on and NaNs in the sparse-conv decoder with them
+  off. The ROCm build made the same chest in 8.5 minutes with no NaNs anywhere.
 
 The **weights** are the single-view Q8_0 set plus the BiRefNet matting model, 8.4 GB, and
 BiRefNet-lite (224 MB), the background remover Pixal3D's cut-out uses. Without lite the
@@ -78,7 +84,12 @@ PREBUILT_MIN_DRIVER = "575"
 PREBUILTS = {
     "linux-nvidia": ("trellis-cuda12-linux-x64.tar.gz", "~640 MB"),
     "windows-nvidia": ("trellis-cuda12-windows-x64.zip", "~610 MB"),
+    # AMD gets one of two archives; `prebuilt_for` picks by whether ROCm is installed.
+    "linux-amd": ("trellis-rocm-linux-x64.tar.gz", "~175 MB"),
 }
+AMD_VULKAN_PREBUILT = ("trellis-vulkan-linux-x64.tar.gz", "~26 MB")
+# Prebuilts that need no NVIDIA driver check.
+AMD_PREBUILTS = frozenset({"linux-amd"})
 
 LICENCE = (
     "MIT (code and flow weights); the bundled image encoder is under the\n"
@@ -90,6 +101,17 @@ target = host.build_target
 driver_cuda = host.driver_cuda_version
 find_nvcc = host.find_nvcc
 nvcc_cuda = host.nvcc_cuda_version
+rocm_present = host.has_rocm
+
+
+def prebuilt_for(key: str) -> tuple[str, str, str]:
+    """(archive, size, GPU API) for this machine's prebuilt. AMD is the only key with a
+    choice: ROCm when its libraries are installed, Vulkan otherwise."""
+    if key in AMD_PREBUILTS:
+        if rocm_present():
+            return (*PREBUILTS[key], "ROCm")
+        return (*AMD_VULKAN_PREBUILT, "Vulkan")
+    return (*PREBUILTS[key], "CUDA 12")
 
 
 def build_kind(key: str | None, cuda: tuple[int, int] | None, nvcc: str | None,
@@ -105,6 +127,8 @@ def build_kind(key: str | None, cuda: tuple[int, int] | None, nvcc: str | None,
     """
     if key == "macos-arm64":
         return "metal-source"
+    if key in AMD_PREBUILTS:
+        return "prebuilt"
     prebuilt_runs = key in PREBUILTS and cuda is not None and cuda >= PREBUILT_MIN_CUDA
     # A Windows source build is a Visual Studio project of its own; not offered.
     compile_runs = (key == "linux-nvidia" and bool(nvcc)
@@ -118,7 +142,8 @@ def build_kind(key: str | None, cuda: tuple[int, int] | None, nvcc: str | None,
 
 def current_kind(key: str | None, prefer_compile: bool = False) -> str | None:
     nvcc = find_nvcc() if key == "linux-nvidia" else None
-    return build_kind(key, driver_cuda() if key in PREBUILTS else None, nvcc,
+    cuda_keys = set(PREBUILTS) - AMD_PREBUILTS
+    return build_kind(key, driver_cuda() if key in cuda_keys else None, nvcc,
                       nvcc_cuda(nvcc) if nvcc else None, prefer_compile)
 
 
@@ -131,15 +156,15 @@ def route_and_size(key: str | None,
         return ("compiled locally with CUDA for this card",
                 "10+ minutes of compiling, once, with the CUDA toolkit")
     if kind == "prebuilt":
-        name, size = PREBUILTS[key]
-        return f"CUDA 12 prebuilt ({name}, {PREBUILT_RELEASE})", size
+        name, size, api_name = prebuilt_for(key)
+        return f"{api_name} prebuilt ({name}, {PREBUILT_RELEASE})", size
     return None
 
 
 def no_route_message(key: str | None) -> str:
     if key not in PREBUILTS:
-        return ("Pixal3D needs an Apple Silicon Mac, or Linux/Windows with an NVIDIA card "
-                "(nvidia-smi must list it). Nothing downloaded.")
+        return ("Pixal3D needs an Apple Silicon Mac, Linux/Windows with an NVIDIA card "
+                "(nvidia-smi must list it), or Linux with an AMD card. Nothing downloaded.")
     cuda = driver_cuda()
     have = f"{cuda[0]}.{cuda[1]}" if cuda else "unknown"
     need = f"{PREBUILT_MIN_CUDA[0]}.{PREBUILT_MIN_CUDA[1]}"
@@ -179,7 +204,8 @@ def old_driver_note(key: str | None, prefer_compile: bool = False) -> str | None
     Without it the installer just starts a 10+ minute compile, and nobody learns that a
     driver update would have made it a one-minute download.
     """
-    if prefer_compile or key not in PREBUILTS or current_kind(key) != "cuda-source":
+    if prefer_compile or key in AMD_PREBUILTS or key not in PREBUILTS \
+            or current_kind(key) != "cuda-source":
         return None
     cuda = driver_cuda()
     have = f"CUDA {cuda[0]}.{cuda[1]}" if cuda else "an unknown CUDA version"
@@ -197,7 +223,7 @@ def build_present() -> bool:
 
 
 def pick_prebuilt(assets: list[dict], key: str) -> dict | None:
-    wanted = PREBUILTS[key][0]
+    wanted = prebuilt_for(key)[0]
     return next((a for a in assets if a.get("name") == wanted), None)
 
 
@@ -239,7 +265,7 @@ def install_prebuilt(key: str) -> Path:
         raise SystemExit(f"Could not reach GitHub: {exc}") from exc
     asset = pick_prebuilt(release.get("assets", []), key)
     if asset is None:
-        raise SystemExit(f"Release {PREBUILT_RELEASE} has no {PREBUILTS[key][0]}.")
+        raise SystemExit(f"Release {PREBUILT_RELEASE} has no {prebuilt_for(key)[0]}.")
     VENDOR.mkdir(parents=True, exist_ok=True)
     archive = VENDOR / asset["name"]
     print(f"Downloading {asset['name']} ({asset.get('size', 0) / 1e6:.0f} MB)...", flush=True)

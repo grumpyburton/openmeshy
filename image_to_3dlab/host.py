@@ -1,8 +1,9 @@
 """What machine is this, in the vocabulary backends declare support in.
 
-One module so the viewer and every bootstrap answer the question the same way. Two
-answers matter today: an Apple Silicon Mac, or a Linux/Windows box with an NVIDIA card.
-Everything else is "other", and a backend that does not list it will not offer a download.
+One module so the viewer and every bootstrap answer the question the same way. Three
+answers matter today: an Apple Silicon Mac, a Linux/Windows box with an NVIDIA card, or
+a Linux box with an AMD card (ggml's Vulkan prebuilts run there). Everything else is
+"other", and a backend that does not list it will not offer a download.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from pathlib import Path
 
 APPLE = "apple-silicon"
 NVIDIA = "nvidia"
+AMD = "amd"
 OTHER = "other"
 
 
@@ -75,23 +77,81 @@ def compute_capability(which: Callable = shutil.which,
     return f"{match[1]}{match[2]}" if match else None
 
 
+DRM = Path("/sys/class/drm")
+AMD_VENDOR = "0x1002"
+
+
+def has_amd_gpu(drm: Path = DRM) -> bool:
+    """True when the Linux kernel exposes an AMD graphics device.
+
+    Read from sysfs rather than a tool: `rocminfo` needs ROCm installed and `vulkaninfo`
+    the Vulkan SDK, but every DRM driver writes its PCI vendor id here, and 0x1002 is
+    AMD. An integrated Radeon counts too; which device ggml's Vulkan backend then uses is
+    its own choice (`GGML_VK_VISIBLE_DEVICES` overrides it).
+    """
+    try:
+        vendors = list(drm.glob("card*/device/vendor"))
+    except OSError:
+        return False
+    for vendor in vendors:
+        try:
+            if vendor.read_text().strip().lower() == AMD_VENDOR:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 @lru_cache(maxsize=1)
 def _cached_nvidia() -> bool:
     return has_nvidia_gpu()
 
 
+# The shared libraries upstream's HIP build of pixal3d.cpp links against (ldd, 2026-10-08).
+# All three live in ROCm's lib directory; the runtime alone is not enough.
+ROCM_LIBS = ("libamdhip64.so", "libhipblas.so", "librocblas.so")
+
+
+def rocm_root(environ: dict[str, str] | None = None) -> Path:
+    env = os.environ if environ is None else environ
+    return Path(env.get("ROCM_PATH") or env.get("ROCM_HOME") or "/opt/rocm")
+
+
+def has_rocm(root: Path | None = None) -> bool:
+    """True when a ROCm install with HIP and the BLAS libraries is present.
+
+    Checked by files rather than by running `rocminfo`: the question is whether a HIP
+    binary can load here, and that is decided by the libraries, not by a tool that may
+    or may not be on PATH.
+    """
+    lib = (root or rocm_root()) / "lib"
+    try:
+        return all(any(lib.glob(f"{name}*")) for name in ROCM_LIBS)
+    except OSError:
+        return False
+
+
+@lru_cache(maxsize=1)
+def _cached_amd() -> bool:
+    return has_amd_gpu()
+
+
 def host_platform(sys_platform: str | None = None, machine: str | None = None,
-                  nvidia: Callable[[], bool] = _cached_nvidia) -> str:
-    """APPLE, NVIDIA or OTHER.
+                  nvidia: Callable[[], bool] = _cached_nvidia,
+                  amd: Callable[[], bool] = _cached_amd) -> str:
+    """APPLE, NVIDIA, AMD or OTHER.
 
     A Mac is decided from `sys.platform` and the CPU alone. Anything else asks the driver,
-    once per process.
+    once per process: NVIDIA first, then AMD. AMD is Linux-only for now, because the
+    check reads sysfs and the Vulkan prebuilts were only tried there.
     """
     family = os_family(sys_platform)
     if family == "macos":
         return APPLE if (machine or platform.machine()) == "arm64" else OTHER
     if family in ("linux", "windows") and nvidia():
         return NVIDIA
+    if family == "linux" and amd():
+        return AMD
     return OTHER
 
 
@@ -200,13 +260,15 @@ def executable(directory: Path, name: str, family: str | None = None) -> Path:
 
 def build_target(platform_id: str | None = None, family: str | None = None) -> str | None:
     """Which prebuilt a bootstrap should fetch here: `macos-arm64`, `linux-nvidia`,
-    `windows-nvidia`, or None when nothing fits."""
+    `windows-nvidia`, `linux-amd`, or None when nothing fits."""
     platform_id = platform_id or host_platform()
     family = family or os_family()
     if platform_id == APPLE:
         return "macos-arm64"
     if platform_id == NVIDIA and family in ("windows", "linux"):
         return f"{family}-nvidia"
+    if platform_id == AMD and family == "linux":
+        return "linux-amd"
     return None
 
 

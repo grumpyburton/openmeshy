@@ -3,7 +3,8 @@
 ![Three source images above the textured 3D models generated from them: a photoreal warrior bust, a stylised garden gnome, and a multi-object shoe-house diorama](docs/images/one-image-in-textured-model-out.jpg)
 
 **Turn a single image into a textured 3D model on your own machine (an Apple Silicon
-Mac, or Linux with an NVIDIA card), with a license-provenance record for every result.**
+Mac, or Linux with an NVIDIA or AMD card), with a license-provenance record for every
+result.**
 
 Apple Silicon deserves more love in the 3D and Imagen community. So this is an attempt at that. 
 
@@ -95,7 +96,7 @@ Six backends, one Generate 3D page. Sadly life is full of trade-offs, so pick th
 
 | Backend | Best for | Runs on | Setup | License |
 |---|---|---|---|---|
-| **Pixal3D (C++/GGML)** ⭐ | Best results we have; one pass, no repaint needed | Mac, NVIDIA | Setup & Status, or `scripts/bootstrap_pixal3d.py` (8.4 GB weights) | MIT (code + flow weights); DINOv3 License (bundled encoder) |
+| **Pixal3D (C++/GGML)** ⭐ | Best results we have; one pass, no repaint needed | Mac, NVIDIA, AMD (Linux) | Setup & Status, or `scripts/bootstrap_pixal3d.py` (8.4 GB weights) | MIT (code + flow weights); DINOv3 License (bundled encoder) |
 | **Hunyuan3D-MLX (Xiong, full pipeline)** | Fast, clean results | Mac (NVIDIA: the row below) | Code is in this repo; weights download separately | MIT (code); Tencent Community License (weights) |
 | **Hunyuan3D-MLX (dgrauet shape + Xiong paint)** | The cleanest shapes, at the cost of manual setup | Mac (NVIDIA: the row below) | Cloned separately, manual | Tencent Community License (code + weights) |
 | **Hunyuan3D-2.1 (NVIDIA)** | Tencent's own shape + PBR paint, one run | NVIDIA (Linux; not Windows yet), 24 GB+ | Setup & Status, or `scripts/bootstrap_hunyuan_cuda.py` (~19.5 GB weights) | Tencent Community License (code + weights) |
@@ -143,7 +144,9 @@ status telling you exactly what's missing:
   `python scripts/bootstrap_pixal3d.py`. It says what it will download and asks first. On a
   Mac it compiles with Metal (needs full Xcode). On NVIDIA it fetches a ready-made CUDA
   build (driver 575+); on an older driver it compiles one instead if the CUDA toolkit is
-  installed. It also installs BiRefNet-lite, the background remover
+  installed. On an AMD card under Linux it fetches upstream's ROCm build (175 MB), or
+  the Vulkan build (26 MB) if ROCm is not installed.
+  It also installs BiRefNet-lite, the background remover
   (224 MB), so thin and light-coloured parts survive the cut-out.
   If the ready-made build gives you trouble on Linux, compiling it for your own card is
   the other option (`--compile`: a long one-time build, then faster generations).

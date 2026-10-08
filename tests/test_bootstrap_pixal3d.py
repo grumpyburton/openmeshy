@@ -28,12 +28,23 @@ def new_driver(monkeypatch):
     monkeypatch.setattr(boot, "find_nvcc", lambda: None)
 
 
+@pytest.fixture
+def rocm(monkeypatch):
+    monkeypatch.setattr(boot, "rocm_present", lambda: True)
+
+
+@pytest.fixture
+def no_rocm(monkeypatch):
+    monkeypatch.setattr(boot, "rocm_present", lambda: False)
+
+
 @pytest.mark.parametrize("key,route,size", [
     ("macos-arm64", "built from source with Metal", "Xcode"),
     ("linux-nvidia", "CUDA 12 prebuilt", "~640 MB"),
     ("windows-nvidia", "CUDA 12 prebuilt", "~610 MB"),
+    ("linux-amd", "ROCm prebuilt", "~175 MB"),
 ])
-def test_announcement_names_backend_route_size_and_licence(monkeypatch, new_driver,
+def test_announcement_names_backend_route_size_and_licence(monkeypatch, new_driver, rocm,
                                                            key, route, size):
     monkeypatch.setattr(boot, "target", lambda: key)
     text = boot.announcement()
@@ -41,12 +52,24 @@ def test_announcement_names_backend_route_size_and_licence(monkeypatch, new_driv
         assert needle in text
 
 
+def test_amd_without_rocm_falls_back_to_the_vulkan_build(monkeypatch, no_rocm):
+    """Vulkan is the lighter archive but misbehaved on RDNA4 (zero voxels, then NaNs in
+    the sparse-conv decoder, 2026-10-08), so it is only offered when ROCm is absent."""
+    monkeypatch.setattr(boot, "target", lambda: "linux-amd")
+    assert boot.prebuilt_for("linux-amd") == ("trellis-vulkan-linux-x64.tar.gz", "~26 MB",
+                                              "Vulkan")
+    text = boot.announcement()
+    assert "Vulkan prebuilt" in text and "~26 MB" in text and "ROCm" not in text
+    assert boot.pick_prebuilt(RELEASE, "linux-amd")["name"] == "trellis-vulkan-linux-x64.tar.gz"
+
+
 def test_unsupported_machine_is_refused_before_anything_is_fetched(monkeypatch, capsys):
     monkeypatch.setattr(boot, "target", lambda: None)
     monkeypatch.setattr(boot, "install_build", lambda *a: pytest.fail("built"))
     monkeypatch.setattr(boot, "install_weights", lambda *a: pytest.fail("downloaded"))
     assert boot.main(["--yes"]) == 1
-    assert "Apple Silicon Mac, or Linux/Windows with an NVIDIA card" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Apple Silicon Mac" in out and "NVIDIA card" in out and "AMD card" in out
 
 
 def test_no_yes_and_no_terminal_means_no_download(monkeypatch, new_driver):
@@ -84,14 +107,16 @@ RELEASE = [{"name": n, "browser_download_url": f"https://x/{n}"} for n in (
     "trellis-cuda-linux-x64.tar.gz", "trellis-cuda-windows-x64.zip",
     "trellis-cuda12-linux-x64.tar.gz", "trellis-cuda12-windows-x64.zip",
     "trellis-vulkan-linux-x64.tar.gz", "trellis-metal-macos-arm64.tar.gz",
+    "trellis-rocm-linux-x64.tar.gz",
 )]
 
 
 @pytest.mark.parametrize("key,expected", [
     ("linux-nvidia", "trellis-cuda12-linux-x64.tar.gz"),
     ("windows-nvidia", "trellis-cuda12-windows-x64.zip"),
+    ("linux-amd", "trellis-rocm-linux-x64.tar.gz"),
 ])
-def test_prebuilt_is_the_cuda12_build_for_this_os(key, expected):
+def test_prebuilt_is_the_cuda12_build_for_this_os(key, expected, rocm):
     """CUDA 12, not the unversioned (newer) CUDA build: it runs on older drivers."""
     assert boot.pick_prebuilt(RELEASE, key)["name"] == expected
 
@@ -188,9 +213,21 @@ NVCC = "/usr/local/cuda/bin/nvcc"
     ("windows-nvidia", (12, 8), "C:/cuda/nvcc.exe", (12, 8), None),
     ("windows-nvidia", (13, 0), "C:/cuda/nvcc.exe", (12, 8), "prebuilt"),
     ("macos-arm64", None, None, None, "metal-source"),
+    # AMD: the Vulkan prebuilt, with no CUDA driver or compiler in the picture.
+    ("linux-amd", None, None, None, "prebuilt"),
+    ("linux-amd", None, NVCC, (12, 8), "prebuilt"),
 ])
 def test_the_driver_and_compiler_pick_the_route(key, cuda, nvcc, nvcc_cuda, expected):
     assert boot.build_kind(key, cuda, nvcc, nvcc_cuda) == expected
+
+
+def test_an_amd_machine_never_asks_the_nvidia_driver(monkeypatch, rocm):
+    """`nvidia-smi` is not there, and neither AMD build cares."""
+    monkeypatch.setattr(boot, "driver_cuda", lambda: pytest.fail("asked nvidia-smi"))
+    monkeypatch.setattr(boot, "find_nvcc", lambda: pytest.fail("looked for nvcc"))
+    assert boot.current_kind("linux-amd") == "prebuilt"
+    assert boot.old_driver_note("linux-amd") is None
+    assert "ROCm prebuilt" in boot.route_and_size("linux-amd")[0]
 
 
 def test_a_compile_can_be_asked_for_when_it_would_run():

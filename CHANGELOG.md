@@ -8,11 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Image sidecars said "Metal" everywhere.** The runtime in a generated picture's
+  provenance record now follows the OS: Metal on a Mac, CUDA on Windows, Vulkan on Linux.
+- **The GPU-fallback warning named only NVIDIA.** It now tells AMD users to check
+  `vulkaninfo --summary` too.
 - **Unity exports of models with WebP or JPEG textures.** Blender kept a packed image's
   own format whatever the file was called, so Unity got `.png` files it could not read.
   Every exported texture is now checked and re-encoded as real PNG.
 
 ### Added
+- **AMD cards on Linux.** The lab now recognises an AMD GPU (read from sysfs) as a
+  machine of its own. Pixal3D installs upstream's ROCm prebuilt there (Vulkan when ROCm
+  is not installed), and the text-to-image setup fetches the same Vulkan `sd-cli` NVIDIA
+  uses. Tried on a Radeon RX 9060 XT: a 768px picture in 25 s, a chest in 8.5 min. The
+  Setup page's AMD tab is live. Pixal3D's Vulkan build misbehaved on that card (zero
+  voxels, then NaNs), which is why ROCm comes first.
 - **`generate_image` MCP tool.** Claude can now make the source picture too: text to PNG
   with Qwen-Image on this Mac, then straight on to `image_to_unity`. The PNG keeps its
   licence record, which carries Qwen's non-commercial terms.

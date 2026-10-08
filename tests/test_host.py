@@ -39,7 +39,56 @@ def test_linux_and_windows_with_an_nvidia_card_are_nvidia():
 
 
 def test_linux_without_a_card_is_other():
-    assert host.host_platform("linux", "x86_64", nvidia=lambda: False) == "other"
+    assert host.host_platform("linux", "x86_64", nvidia=lambda: False,
+                              amd=lambda: False) == "other"
+
+
+def test_linux_with_an_amd_card_is_amd_and_nvidia_wins_a_tie():
+    assert host.host_platform("linux", "x86_64", nvidia=lambda: False,
+                              amd=lambda: True) == host.AMD
+    # A box with both: the CUDA routes are the tested ones.
+    assert host.host_platform("linux", "x86_64", nvidia=lambda: True,
+                              amd=lambda: True) == host.NVIDIA
+
+
+def test_amd_is_linux_only_for_now():
+    """The sysfs check does not exist on Windows, and the Vulkan prebuilts were only
+    tried on Linux."""
+    assert host.host_platform("win32", "AMD64", nvidia=lambda: False,
+                              amd=lambda: True) == "other"
+
+
+def test_amd_gpu_is_read_from_sysfs(tmp_path: Path):
+    """0x1002 is AMD's PCI vendor id; a Radeon RX 9060 XT box (2026-10-08) wrote it for
+    both the card and the Ryzen's integrated GPU."""
+    (tmp_path / "card0" / "device").mkdir(parents=True)
+    (tmp_path / "card0" / "device" / "vendor").write_text("0x8086\n")
+    assert host.has_amd_gpu(tmp_path) is False
+    (tmp_path / "card1" / "device").mkdir(parents=True)
+    (tmp_path / "card1" / "device" / "vendor").write_text("0x1002\n")
+    assert host.has_amd_gpu(tmp_path) is True
+
+
+def test_no_drm_at_all_means_no_amd_gpu(tmp_path: Path):
+    assert host.has_amd_gpu(tmp_path / "missing") is False
+
+
+def test_rocm_needs_hip_and_both_blas_libraries(tmp_path: Path):
+    """What upstream's HIP build links against, per ldd on 2026-10-08. The runtime alone
+    would load the binary and then fail on the first matrix multiply."""
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "libamdhip64.so.7").write_text("")
+    assert host.has_rocm(tmp_path) is False
+    (lib / "libhipblas.so.3").write_text("")
+    (lib / "librocblas.so.5").write_text("")
+    assert host.has_rocm(tmp_path) is True
+    assert host.has_rocm(tmp_path / "missing") is False
+
+
+def test_rocm_root_follows_the_environment():
+    assert host.rocm_root({}) == Path("/opt/rocm")
+    assert host.rocm_root({"ROCM_PATH": "/x/rocm"}) == Path("/x/rocm")
 
 
 def test_nvidia_gpu_needs_nvidia_smi_on_path():
@@ -78,6 +127,8 @@ def test_executable_gets_exe_only_on_windows(tmp_path: Path):
     ("apple-silicon", "macos", "macos-arm64"),
     ("nvidia", "linux", "linux-nvidia"),
     ("nvidia", "windows", "windows-nvidia"),
+    ("amd", "linux", "linux-amd"),
+    ("amd", "windows", None),
     ("other", "linux", None),
     ("other", "macos", None),
 ])

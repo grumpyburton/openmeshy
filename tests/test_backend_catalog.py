@@ -501,8 +501,19 @@ def test_setup_fetch_flag_is_answered_per_machine():
 # --- Setup page tabs: one per machine family, so nobody reads another machine's cards ---
 def test_catalog_offers_a_tab_per_machine_family():
     tabs = bc.catalog_status(bc.NVIDIA)["platforms"]
-    assert [t["id"] for t in tabs] == [bc.APPLE, bc.NVIDIA, "amd"]
-    assert next(t for t in tabs if t["id"] == "amd")["coming"] is True
+    assert [t["id"] for t in tabs] == [bc.APPLE, bc.NVIDIA, bc.AMD]
+    # AMD has a backend now (Pixal3D's Vulkan prebuilt), so its tab is live, not "coming".
+    assert all(t["coming"] is False for t in tabs)
+
+
+def test_an_amd_machine_is_offered_pixal3d_and_nothing_cuda_or_metal():
+    views = bc.catalog_status(bc.AMD)["views"]
+    amd = {b["id"] for b in views[bc.AMD]}
+    assert "pixal3d" in amd
+    assert not amd & {"hunyuan-cuda", "hunyuan_xiong", "trellis", "sf3d"}
+    pixal = next(b for b in views[bc.AMD] if b["id"] == "pixal3d")
+    assert "ROCm" in pixal["tradeoff"] and "Xcode" not in pixal["tradeoff"]
+    assert bc.catalog_status(host=bc.AMD)["host"]["any_backend_runs_here"] is True
 
 
 def test_each_tab_lists_only_what_runs_on_that_machine():

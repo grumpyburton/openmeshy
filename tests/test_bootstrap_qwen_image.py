@@ -80,6 +80,9 @@ def test_a_non_interactive_run_refuses_rather_than_hanging(monkeypatch, capsys):
 
 
 def test_yes_proceeds_without_asking(monkeypatch):
+    # A Mac, so no GPU probe runs: on Linux or Windows it would start the real sd-cli,
+    # and these tests are about the yes/no flow, not the probe.
+    monkeypatch.setattr(boot, "target", lambda: "macos-arm64")
     called = []
     monkeypatch.setattr(boot, "install_binary", lambda *a, **k: called.append("build"))
     monkeypatch.setattr(boot, "install_weights", lambda *a, **k: called.append("weights"))
@@ -100,6 +103,9 @@ def test_weights_only_skips_the_binary(monkeypatch):
 def test_an_existing_binary_is_not_redownloaded(monkeypatch, capsys):
     """Re-running a bootstrap on an installed tree must no-op, not re-fetch. AGENTS.md
     asks patch scripts to be idempotent and the same courtesy applies here."""
+    # A Mac, so no GPU probe runs: on Linux or Windows it would start the real sd-cli,
+    # and these tests are about the yes/no flow, not the probe.
+    monkeypatch.setattr(boot, "target", lambda: "macos-arm64")
     monkeypatch.setattr(boot, "install_binary", lambda *a, **k: pytest.fail("redownloaded"))
     monkeypatch.setattr(boot, "install_weights", lambda *a, **k: None)
     monkeypatch.setattr(boot, "binary_present", lambda: True)
@@ -204,6 +210,23 @@ def test_nvidia_install_stops_before_the_weights_if_the_gpu_is_unreachable(
 def test_nvidia_install_continues_when_the_gpu_answers(monkeypatch):
     _nvidia_linux(monkeypatch)
     monkeypatch.setattr(boot, "probe_gpu", lambda *a: "ggml_vulkan: Found 1 Vulkan devices:")
+    fetched = []
+    monkeypatch.setattr(boot, "install_weights", lambda: fetched.append(1))
+    assert boot.main(["--yes"]) == 0
+    assert fetched == [1]
+
+
+def test_an_amd_machine_gets_the_same_vulkan_build_and_is_probed(monkeypatch):
+    """AMD runs the Linux Vulkan archive NVIDIA does. It loads its GPU backend at run time
+    too, so a CPU-only start must stop the install before the weights."""
+    assert boot.BUILDS["linux-amd"].assets == boot.BUILDS["linux-nvidia"].assets
+    assert "AMD" in boot.BUILDS["linux-amd"].route
+    monkeypatch.setattr(boot, "target", lambda: "linux-amd")
+    monkeypatch.setattr(boot, "binary_present", lambda: True)
+    monkeypatch.setattr(boot, "probe_gpu", lambda *a: "load_backend: loaded CPU backend")
+    monkeypatch.setattr(boot, "install_weights", lambda: pytest.fail("downloaded"))
+    assert boot.main(["--yes"]) == 1
+    monkeypatch.setattr(boot, "probe_gpu", lambda *a: "ggml_vulkan: Found 2 Vulkan devices:")
     fetched = []
     monkeypatch.setattr(boot, "install_weights", lambda: fetched.append(1))
     assert boot.main(["--yes"]) == 0

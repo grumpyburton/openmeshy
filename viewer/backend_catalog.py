@@ -35,7 +35,7 @@ if str(REPO) not in sys.path:
 from image_to_3dlab import autorig as _autorig
 from image_to_3dlab import host as _host
 from image_to_3dlab import matte as _matte
-from image_to_3dlab.host import APPLE, NVIDIA
+from image_to_3dlab.host import AMD, APPLE, NVIDIA
 from image_to_3dlab.provenance import QWEN_OUTPUT_RIGHTS
 
 HF_HUB_DIR = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub"
@@ -45,11 +45,12 @@ GB = 1024 ** 3
 # Which machines a backend can run on is per-backend data rather than one "is this a
 # Mac?" test, so a route gains NVIDIA support by adding a string to its `runs_on`. The
 # detection itself lives in `image_to_3dlab.host`, shared with the bootstraps.
-PLATFORM_LABELS = {APPLE: "an Apple Silicon Mac", NVIDIA: "an NVIDIA GPU"}
-# Setup page tabs, in order. AMD has a tab before it has a backend, so its users find out
-# it is coming instead of reading NVIDIA instructions.
-TAB_LABELS = {APPLE: "Mac (Apple Silicon)", NVIDIA: "NVIDIA (Linux)", "amd": "AMD"}
-VIEW_PLATFORMS = (APPLE, NVIDIA)
+PLATFORM_LABELS = {APPLE: "an Apple Silicon Mac", NVIDIA: "an NVIDIA GPU",
+                   AMD: "an AMD GPU (Linux)"}
+# Setup page tabs, in order. A tab outside VIEW_PLATFORMS is shown as "coming" rather
+# than hidden, so its users find out instead of reading another machine's instructions.
+TAB_LABELS = {APPLE: "Mac (Apple Silicon)", NVIDIA: "NVIDIA (Linux)", AMD: "AMD (Linux)"}
+VIEW_PLATFORMS = (APPLE, NVIDIA, AMD)
 
 
 def venv_python(project: Path) -> Path:
@@ -65,7 +66,7 @@ def venv_python(project: Path) -> Path:
 
 
 def host_platform() -> str:
-    """What this machine is: APPLE, NVIDIA or "other". See `image_to_3dlab.host`.
+    """What this machine is: APPLE, NVIDIA, AMD or "other". See `image_to_3dlab.host`.
 
     Kept as a name here because the viewer and its tests reach for it on this module.
     """
@@ -283,18 +284,20 @@ CATALOG: tuple[Backend, ...] = (
         best_for="Best results we have. One pass, no repaint needed.",
         tradeoff=(
             "On a Mac it compiles locally and needs full Xcode for the Metal compiler. "
-            "On NVIDIA it downloads a ready-made CUDA build; no compiling."
+            "On NVIDIA and AMD it downloads a ready-made build; no compiling."
         ),
         overrides_by_host={
             APPLE: {"tradeoff": "Compiles on your Mac, and needs full Xcode for the Metal "
                                 "compiler."},
             NVIDIA: {"tradeoff": "Downloads a ready-made CUDA build, no compiling "
                                  "(driver 575 or newer)."},
+            AMD: {"tradeoff": "Downloads a ready-made ROCm build (Vulkan if ROCm is not "
+                              "installed), no compiling."},
         },
         license_name="MIT (code + flow weights); DINOv3 License (bundled encoder)",
         license_url="https://huggingface.co/raven38/pixal3d-sv-q8_0-v1",
         install="scripts/bootstrap_pixal3d.py",
-        runs_on=(APPLE, NVIDIA),
+        runs_on=(APPLE, NVIDIA, AMD),
         setup_minutes=20,
         build_probes=(_host.executable(REPO / "vendor" / "pixal3d-cpp" / "build", "trellis-cli"),),
         weights=(

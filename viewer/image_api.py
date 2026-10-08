@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from image_to_3dlab.host import NVIDIA, executable, host_platform
+from image_to_3dlab.host import AMD, NVIDIA, executable, host_platform, os_family
 from image_to_3dlab.provenance import QWEN_OUTPUT_RIGHTS
 from image_to_3dlab.sdcpp import NO_GPU_HELP, BackendWatch
 
@@ -244,8 +244,21 @@ def weight_manifest() -> dict[str, dict[str, str]]:
     }
 
 
+# The GPU API behind the sd-cli build the bootstrap installs on each OS: Metal on a Mac,
+# CUDA on Windows, Vulkan on Linux (NVIDIA and AMD alike). Matches
+# scripts/bootstrap_qwen_image.py's BUILDS.
+RUNTIME_BY_OS = {"macos": "Metal", "windows": "CUDA", "linux": "Vulkan"}
+
+
+def runtime_label(family: str | None = None) -> str:
+    """`stable-diffusion.cpp (<GPU API>)`, for the sidecar. A record that said Metal on a
+    Linux box was wrong, and a sidecar is exactly the place that must not be."""
+    api_name = RUNTIME_BY_OS.get(family or os_family(), "unknown backend")
+    return f"stable-diffusion.cpp ({api_name})"
+
+
 def provenance(prompt: str, settings: dict[str, Any], seconds: float,
-               output_path: Path) -> dict[str, Any]:
+               output_path: Path, family: str | None = None) -> dict[str, Any]:
     """What this picture is, and what the licence lets you do with it."""
     return {
         "schema_version": 1,
@@ -253,7 +266,7 @@ def provenance(prompt: str, settings: dict[str, Any], seconds: float,
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model": {
             "id": MODEL_ID,
-            "runtime": "stable-diffusion.cpp (Metal)",
+            "runtime": runtime_label(family),
             "weights": weight_manifest(),
         },
         "license": {
@@ -370,7 +383,7 @@ def run_job(job: ImageJob, manager: ImageJobManager,
         assert job.process.stdout is not None
         # Only where a GPU is expected from a runtime-loaded backend. The Mac build is
         # Metal and says nothing of the sort.
-        watch = BackendWatch() if host_platform() == NVIDIA else None
+        watch = BackendWatch() if host_platform() in (NVIDIA, AMD) else None
         no_gpu = False
         buffer = b""
         while True:

@@ -246,6 +246,7 @@ def test_the_command_follows_the_machine(monkeypatch):
     assert dl.building_label("trellis") == "building the CUDA version"
     monkeypatch.setattr(backend_catalog, "host_platform", lambda: backend_catalog.APPLE)
     assert dl.building_label("trellis") == "building the Metal port"
+    assert dl.building_label("pixal3d", host=dl.AMD) == "fetching the Vulkan build"
 
 
 def test_a_setup_run_on_nvidia_holds_the_cuda_command(monkeypatch):

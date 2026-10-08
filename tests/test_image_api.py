@@ -155,6 +155,20 @@ def test_provenance_says_the_output_is_yours_but_the_model_is_not():
     assert "inherits the non-commercial" not in note
 
 
+@pytest.mark.parametrize("family,expected", [
+    ("macos", "stable-diffusion.cpp (Metal)"),
+    ("linux", "stable-diffusion.cpp (Vulkan)"),
+    ("windows", "stable-diffusion.cpp (CUDA)"),
+])
+def test_sidecar_names_the_gpu_api_of_this_os(family, expected):
+    """The sidecar once said Metal on a Linux box. It follows the bootstrap's build table:
+    Metal on a Mac, CUDA on Windows, Vulkan on Linux for NVIDIA and AMD alike."""
+    record = api.provenance("a fox", api.clean_settings({}), 1.0, Path("/o/f.png"),
+                            family=family)
+    assert record["model"]["runtime"] == expected
+    assert api.runtime_label(family) == expected
+
+
 def test_output_goes_to_the_images_folder():
     """One folder for every picture; the licence travels in the provenance record."""
     assert api.OUTPUT_ROOT == api.REPO / "output" / "images"
@@ -230,6 +244,21 @@ def test_a_cpu_only_run_on_an_nvidia_machine_is_stopped_with_the_fix(tmp_path, m
     assert time.monotonic() - started < 10, "the CPU run was left to finish"
     assert job.status == "error"
     assert "libegl1 libgl1" in job.error
+
+
+def test_an_amd_machine_is_watched_too(tmp_path, monkeypatch):
+    """The AMD build is the same runtime-loaded Vulkan archive, so the same watch applies."""
+    monkeypatch.setattr(api, "host_platform", lambda: api.AMD)
+    command = _fake_sd_cli(tmp_path, [
+        "load_backend: loaded CPU backend from /x/libggml-cpu-zen4.so",
+    ], then_sleep=60)
+    monkeypatch.setattr(api, "build_command", lambda *a, **k: command)
+    manager = api.ImageJobManager(output_root=tmp_path)
+    job = manager.create("a fox", api.clean_settings({}))
+    started = time.monotonic()
+    api.run_job(job, manager, weights=WEIGHTS)
+    assert time.monotonic() - started < 10, "the CPU run was left to finish"
+    assert job.status == "error" and "vulkaninfo" in job.error
 
 
 def test_a_gpu_run_is_left_alone(tmp_path, monkeypatch):
